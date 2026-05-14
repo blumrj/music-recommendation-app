@@ -1,0 +1,12 @@
+{
+  "entryPointStrategy": "expand",
+  "entryPoints": ["src"],
+  "out": "docs",
+  "includeVersion": true,
+  "excludeExternals": true,
+  "excludePrivate": false,
+  "excludeProtected": false,
+  "categorizeByGroup": true,
+  "groupOrder": ["Controllers", "Services", "Routes", "Middleware", "Utils", "Types", "Other"],
+  "defaultCategory": "Other"
+}

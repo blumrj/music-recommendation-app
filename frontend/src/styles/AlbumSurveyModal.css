@@ -1,0 +1,328 @@
+/**
+ * Album Survey Modal Styles
+ * In the spirit of Winamp's XP aesthetic
+ */
+
+.survey-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.survey-modal {
+  background: linear-gradient(180deg, #c0c0c0 0%, #dfdfdf 100%);
+  border: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.5),
+              inset -1px -1px 0 rgba(0, 0, 0, 0.3),
+              0 4px 12px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 550px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 2px;
+  overflow: hidden;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Header with album art */
+.survey-header {
+  background: linear-gradient(90deg, #3B2B5E 0%, #9B8CB8 100%);
+  color: white;
+  padding: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border-bottom: 1px solid #3B2B5E;
+}
+
+.survey-album-art {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border: 2px solid white;
+  flex-shrink: 0;
+}
+
+.survey-album-info {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.survey-album-info h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.survey-album-info p {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.survey-close {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: bold;
+  color: black;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s;
+}
+
+.survey-close:hover {
+  background: #dfdfdf;
+}
+
+.survey-close:active {
+  border-color: #808080 #dfdfdf #dfdfdf #808080;
+  background: #bfbfbf;
+}
+
+/* Progress bar */
+.survey-progress {
+  height: 6px;
+  background: #dfdfdf;
+  border-bottom: 1px solid #808080;
+  overflow: hidden;
+}
+
+.survey-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3B2B5E 0%, #9B8CB8 100%);
+  transition: width 0.3s ease-out;
+}
+
+/* Main content area */
+.survey-content {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background: #c0c0c0;
+}
+
+.survey-question {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.survey-question h4 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: bold;
+  color: #000;
+}
+
+/* Options grid */
+.survey-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.survey-checkbox,
+.survey-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 2px;
+  user-select: none;
+  transition: background 0.1s;
+  font-size: 12px;
+  color: #000;
+}
+
+.survey-checkbox:hover,
+.survey-radio:hover {
+  background: rgba(0, 0, 128, 0.1);
+}
+
+.survey-checkbox input[type="checkbox"],
+.survey-radio input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  accent-color: #7B5BA8;
+}
+
+.survey-checkbox span,
+.survey-radio span {
+  line-height: 1.4;
+}
+
+/* Textarea for optional note */
+.survey-textarea {
+  width: 100%;
+  padding: 8px;
+  border: 2px solid;
+  border-color: #808080 #dfdfdf #dfdfdf #808080;
+  background: white;
+  font-family: 'MS Sans Serif', Arial, sans-serif;
+  font-size: 12px;
+  color: #000;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.survey-textarea:focus {
+  outline: none;
+  border-color: #3B2B5E;
+  box-shadow: inset 0 0 0 1px #9B8CB8;
+}
+
+/* Buttons */
+.survey-buttons {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  background: #c0c0c0;
+  border-top: 1px solid #dfdfdf;
+  justify-content: flex-end;
+}
+
+.survey-btn {
+  padding: 4px 16px;
+  border: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+  background: linear-gradient(180deg, #dfdfdf 0%, #c0c0c0 100%);
+  font-family: 'MS Sans Serif', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: bold;
+  color: #000;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.1s;
+  border-radius: 2px;
+  min-width: 80px;
+  text-align: center;
+}
+
+.survey-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #efefef 0%, #d0d0d0 100%);
+}
+
+.survey-btn:active:not(:disabled) {
+  border-color: #808080 #dfdfdf #dfdfdf #808080;
+  background: linear-gradient(180deg, #c0c0c0 0%, #b0b0b0 100%);
+}
+
+.survey-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  color: #808080;
+}
+
+.survey-btn-primary {
+  background: linear-gradient(180deg, #3B2B5E 0%, #9B8CB8 100%);
+  color: white;
+  border-color: #dfdfdf #3B2B5E #3B2B5E #dfdfdf;
+}
+
+.survey-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #9B8CB8 0%, #7B5BA8 100%);
+}
+
+.survey-btn-primary:active:not(:disabled) {
+  border-color: #3B2B5E #dfdfdf #dfdfdf #3B2B5E;
+}
+
+.survey-btn-secondary {
+  min-width: 70px;
+}
+
+/* Scrollbar styling for Windows XP feel */
+.survey-content::-webkit-scrollbar {
+  width: 16px;
+}
+
+.survey-content::-webkit-scrollbar-track {
+  background: #c0c0c0;
+}
+
+.survey-content::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #dfdfdf 0%, #c0c0c0 100%);
+  border: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+}
+
+.survey-content::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #efefef 0%, #d0d0d0 100%);
+}
+
+/* Mobile responsive */
+@media (max-width: 600px) {
+  .survey-modal {
+    max-width: 95vw;
+    max-height: 85vh;
+  }
+
+  .survey-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .survey-album-art {
+    width: 100%;
+    height: auto;
+  }
+
+  .survey-album-info h3,
+  .survey-album-info p {
+    white-space: normal;
+  }
+
+  .survey-buttons {
+    flex-wrap: wrap;
+  }
+
+  .survey-btn {
+    flex: 1;
+    min-width: 60px;
+  }
+}

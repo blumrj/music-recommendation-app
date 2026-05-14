@@ -1,0 +1,43 @@
+/**
+ * ONBOARDING SURVEY WIZARD STYLES
+ * Windows XP themed styling for the wizard
+ */
+
+.onboarding-container {
+  font-family: 'MS Sans Serif', Arial, sans-serif;
+}
+
+.onboarding-window {
+  /* Windows XP classic style */
+  box-shadow: 
+    inset 1px 1px 0 0 #dfdfdf,
+    inset -1px -1px 0 0 #808080,
+    1px 1px 0 0 #ffffff,
+    -1px -1px 0 0 #000000;
+}
+
+.onboarding-album-display {
+  /* Album card style */
+  background-image: repeating-linear-gradient(
+    90deg,
+    #c0c0c0 0px,
+    #c0c0c0 1px,
+    #d0d0d0 1px,
+    #d0d0d0 2px
+  );
+}
+
+.onboarding-analyzing {
+  /* Analyzing state - slightly different styling */
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .onboarding-container {
+    padding: 8px;
+  }
+
+  .onboarding-window {
+    max-width: 100%;
+  }
+}

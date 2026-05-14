@@ -1,0 +1,430 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  spotifyId String?  @unique
+  name      String?
+  refreshToken String?
+  spotifyToken String?           // Spotify API access token (for calling Spotify APIs)
+  spotifyRefreshToken String?     // Spotify refresh token (for refreshing Spotify access token)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  albums               Album[]
+  recommendations      Recommendation[]
+  favorites            Favorite[]
+  albumSurveys         AlbumSurvey[]
+  tasteProfile         UserTasteProfile?
+  emotionalDeviations  UserEmotionalDeviation[]
+  contextModifier      ContextModifier?
+  recommendationFeedback RecommendationFeedback[]
+}
+
+model Album {
+  id        String   @id @default(uuid())
+  spotifyId String?  @unique
+  title     String
+  artist    String
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User @relation(fields: [userId], references: [id])
+}
+
+model Recommendation {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spotifyId   String
+  title       String
+  artist      String
+  imageUrl    String
+  spotifyUrl  String   // Link to Spotify album
+  generatedAt DateTime @default(now())
+  lat         Float
+  lon         Float
+
+  @@index([userId, generatedAt])
+}
+
+model Favorite {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  albumSpotifyId   String
+  albumName        String
+  artist           String
+  imageUrl         String
+  spotifyUrl       String
+  createdAt        DateTime @default(now())
+
+  @@unique([userId, albumSpotifyId])
+  @@index([userId])
+}
+
+model AlbumSurvey {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spotifyAlbumId   String
+  albumName        String
+  artist           String
+  imageUrl         String
+  
+  // OLD Survey responses (deprecated - kept for backward compatibility)
+  seasons          String[]               // ["autumn", "winter", "year-round"]
+  emotions         String[]               // ["peaceful", "melancholic", "healing"]
+  whenYouListen    String[]               // ["walking", "bad weather", "alone"]
+  movementPreference String?               // "slow" | "walk" | "dance" | "reflect" | "dream" | "relax"
+  vibe             String[]               // ["nature", "earthy", "moody", "water"]
+  optionalNote     String?                // User's free-text note
+  
+  // PHASE 1: Experiential survey responses (0-100 scale, 7D dimensions)
+  valence_response        Int?              // 0=Sad, 100=Happy/Uplifting
+  arousal_response        Int?              // 0=Calm, 100=Energized
+  tension_response        Int?              // 0=Relaxed, 100=Tense
+  warmth_response         Int?              // 0=Cold, 100=Warm
+  intimacy_response       Int?              // 0=Distant, 100=Personal
+  density_response        Int?              // 0=Sparse, 100=Rich/Layered
+  groundedness_response   Int?              // 0=Dreamy, 100=Grounded
+  
+  // DEPRECATED: Old phase 1 fields (kept for backward compat, not used in new surveys)
+  introspection_response  Int?              // DEPRECATED - was 0=Reflective, 100=External
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, spotifyAlbumId])
+  @@index([userId])
+}
+
+model UserTasteProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // ─────────────────────────────────────────────────────────────────────
+  // PHASE 3+ ARCHITECTURE: 13D Emotional Vector Space
+  // These dimensions are derived from user surveys + album embeddings
+  // ─────────────────────────────────────────────────────────────────────
+  
+  // Psychological Core (VAD-based, research-backed)
+  valence           Float    @default(0.5)    // happy ↔ sad/melancholic
+  arousal           Float    @default(0.5)    // calm ↔ energetic/intense
+  tension           Float    @default(0.5)    // resolved/peaceful ↔ unresolved/tense
+  
+  // Atmospheric Layer (music-specific, where weather has most effect)
+  warmth            Float    @default(0.5)    // cold/distant ↔ warm/intimate
+  intimacy          Float    @default(0.5)    // exposed ↔ personal/private
+  density           Float    @default(0.5)    // sparse/minimal ↔ rich/full
+  spaciousness      Float    @default(0.5)    // compressed ↔ open/reverberant
+  organicSynthetic  Float    @default(0.5)    // acoustic/live ↔ synthetic/electronic
+  
+  // Experiential/Temporal Layer (context-dependent, time-sensitive)
+  nostalgia         Float    @default(0.5)    // present-focused ↔ memory-focused
+  groundedness      Float    @default(0.5)    // escapist ↔ grounded/real
+  
+  // Foundation dimensions (overlap but necessary for smooth transition)
+  introspection     Float    @default(0.5)    // external ↔ internal/reflective
+  movement          Float    @default(0.5)    // static ↔ dynamic/evolving
+  
+  // ─────────────────────────────────────────────────────────────────────
+  // PERCEPTION BIAS LAYER (7D - how user emotionally reinterprets albums)
+  // 
+  // Represents: surveyResponse - intrinsicEmbedding
+  // 
+  // These capture the user's unique emotional interpretation patterns.
+  // They should NOT override intrinsic embeddings, but gently shift them.
+  // 
+  // Example:
+  // - Album has intrinsic warmth = 0.2 (cold)
+  // - User perceives warmth = 0.8 (warm)
+  // - Bias = +0.6 (user adds warmth to cold albums)
+  // - Interpretation: "This user emotionally interprets even cold music as warmer"
+  // ─────────────────────────────────────────────────────────────────────
+  bias_valence      Float    @default(0.0)    // User's valence interpretation offset
+  bias_arousal      Float    @default(0.0)    // User's arousal interpretation offset
+  bias_tension      Float    @default(0.0)    // User's tension interpretation offset
+  bias_warmth       Float    @default(0.0)    // User's warmth interpretation offset
+  bias_intimacy     Float    @default(0.0)    // User's intimacy interpretation offset
+  bias_density      Float    @default(0.0)    // User's density interpretation offset
+  bias_groundedness Float    @default(0.0)    // User's groundedness interpretation offset
+  
+  // ─────────────────────────────────────────────────────────────────────
+  // LEGACY DIMENSIONS (kept for backward compatibility, will deprecate)
+  // Migration strategy: map old → new during data migration
+  // ─────────────────────────────────────────────────────────────────────
+  nature            Float?   @default(0.5)   // DEPRECATED: see warmth + groundedness
+  healing           Float?   @default(0.5)   // DEPRECATED: see warmth + spaciousness
+  melancholy        Float?   @default(0.5)   // DEPRECATED: see valence (inverse)
+  freedom           Float?   @default(0.5)   // DEPRECATED: see arousal + groundedness
+  energyLevel       Float?   @default(0.5)   // DEPRECATED: see arousal
+  coziness          Float?   @default(0.5)   // DEPRECATED: see warmth + intimacy
+  dreaminess        Float?   @default(0.5)   // DEPRECATED: see groundedness (inverse)
+  
+  // Insights & metadata
+  dominantThemes    String[]               // ["nature", "introspection", "healing"]
+  userType          String?                // Description of listener type
+  preferredContexts String[]               // ["walking", "autumn", "alone"]
+  preferredMovements String[]              // ["slow walking", "stillness"]
+  seasonalPreference String?               // "Autumn and winter"
+  insights          String?                // 2-3 sentences about their taste
+  
+  albumsAnalyzed    Int      @default(0)   // How many albums went into this profile
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// ALBUM EMOTIONAL EMBEDDING
+// 
+// Represents the intrinsic emotional properties of an album.
+// Not user-specific - this is the general emotional profile learned from
+// audio features, collaborative signals, and (optionally) aggregate survey data.
+// 
+// Used to:
+// - Find emotionally similar albums in 13D space
+// - Build user embeddings from surveyed albums
+// - Compute contextual recommendations
+// ═════════════════════════════════════════════════════════════════════════
+model AlbumEmotionalEmbedding {
+  id                  String   @id @default(cuid())
+  spotifyAlbumId      String   @unique
+  
+  // ─────────────────────────────────────────────────────────────────────
+  // 13D INTRINSIC EMOTIONAL EMBEDDING (0-1 scale)
+  // These represent general emotional properties of the album.
+  // Derived from audio features + optional survey aggregation.
+  // ─────────────────────────────────────────────────────────────────────
+  
+  // Psychological Core (VAD-based)
+  valence             Float                   // happy ↔ sad
+  arousal             Float                   // calm ↔ energetic
+  tension             Float                   // peaceful ↔ tense
+  
+  // Atmospheric (music-specific)
+  warmth              Float                   // cold ↔ warm
+  intimacy            Float                   // exposed ↔ intimate
+  density             Float                   // sparse ↔ rich
+  spaciousness        Float                   // compressed ↔ open
+  organicSynthetic    Float                   // synthetic ↔ organic
+  
+  // Experiential/Temporal
+  nostalgia           Float                   // present ↔ memory-focused
+  groundedness        Float                   // escapist ↔ grounded
+  introspection       Float                   // external ↔ internal
+  movement            Float                   // static ↔ dynamic
+  
+  // ─────────────────────────────────────────────────────────────────────
+  // METADATA & QUALITY
+  // ─────────────────────────────────────────────────────────────────────
+  
+  // How this embedding was derived
+  derivedFrom         String   @default("audioFeatures")  // "audioFeatures" | "surveys" | "collaborative" | "hybrid"
+  
+  // Confidence in this embedding (0-1)
+  // High: well-known albums with lots of data
+  // Low: niche albums, few listeners
+  confidence          Float    @default(0.5)
+  
+  // Album metadata (for debugging/reference)
+  albumName           String?
+  artist              String?
+  imageUrl            String?
+  spotifyUrl          String?
+  
+  // ─────────────────────────────────────────────────────────────────────
+  // LAST.FM SEMANTIC ENRICHMENT
+  // Stores community tag data used to influence the embedding.
+  // Tags are fetched once per album and blended into the 13D embedding.
+  // ─────────────────────────────────────────────────────────────────────
+  
+  lastfmId            String?              // Last.fm album ID (for reference)
+  tags                Json?                // Array of { tag: string, count: number }
+  enrichmentStatus    String?  @default("pending")  // "enriched" | "pending" | "failed-lastfm" | "audio-only"
+  
+  // Timestamps
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  @@index([spotifyAlbumId])
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// USER EMOTIONAL DEVIATION
+// 
+// Captures how a user's perception DIFFERS from intrinsic album properties.
+// This is the personalization layer - it models the fact that users
+// experience the same album differently.
+// 
+// Example:
+// - Album has intrinsic valence of 0.3 (generally sad)
+// - This user perceives it as 0.7 (finds it comforting)
+// - Deviation: +0.4
+// 
+// Used to:
+// - Build user-specific taste profiles
+// - Capture unique interpretations ("user finds sad music comforting")
+// - Improve recommendation personalization
+// ═════════════════════════════════════════════════════════════════════════
+model UserEmotionalDeviation {
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  spotifyAlbumId       String
+  
+  // How this user's perception differs from intrinsic album properties
+  // Each value is a delta (-1 to +1), where:
+  // - negative: user perceives as less than intrinsic
+  // - positive: user perceives as more than intrinsic
+  deviationVector      Json                   // { valence: 0.4, warmth: -0.1, movement: 0.2, ... }
+  
+  // Consistency of this interpretation (0-1)
+  // High: user consistently sees this album the same way
+  // Low: user's perception varies
+  consistency          Float    @default(0.5)
+  
+  // Source: where does this deviation come from?
+  source               String   @default("survey")  // "survey" | "listening_behavior" | "feedback"
+  
+  // Timestamps
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  @@unique([userId, spotifyAlbumId])
+  @@index([userId])
+  @@index([spotifyAlbumId])
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// CONTEXT MODIFIER (Learned Per-User)
+// 
+// Stores how each user's emotional preferences shift in different contexts.
+// This captures: "user prefers more introspective music on rainy days"
+// 
+// Filled in progressively as users interact with recommendations.
+// Enables Phase 3+ behavioral learning.
+// ═════════════════════════════════════════════════════════════════════════
+model ContextModifier {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Learned contextual adjustments (additive modifiers)
+  // Each is a JSON object mapping dimensions to deltas (-0.3 to +0.3)
+  
+  // Weather-based modifiers
+  weatherModifier      Json     @default("{}")    // { coldWeather: { warmth: 0.15, introspection: 0.20, ... }, ... }
+  
+  // Time-of-day modifiers
+  timeOfDayModifier    Json     @default("{}")    // { morning: { arousal: 0.2, ... }, evening: { nostalgia: 0.15, ... }, ... }
+  
+  // Seasonal modifiers
+  seasonalModifier     Json     @default("{}")    // { autumn: { nostalgia: 0.25, ... }, winter: { warmth: 0.20, ... }, ... }
+  
+  // Timestamps
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// RECOMMENDATION FEEDBACK
+// 
+// Tracks what happens when recommendations are given.
+// Essential for validation and behavioral learning.
+// 
+// Stored when recommendation is generated, updated when user listens.
+// ═════════════════════════════════════════════════════════════════════════
+model RecommendationFeedback {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  recommendationId    String   // Reference to Recommendation table
+  spotifyAlbumId      String
+  
+  // ─────────────────────────────────────────────────────────────────────
+  // LISTENING BEHAVIOR (updated when user listens)
+  // ─────────────────────────────────────────────────────────────────────
+  listeningDuration   Int?     // seconds
+  completed           Boolean? // did user finish album?
+  skipped             Boolean? // did user skip?
+  saved               Boolean? // did user favorite?
+  
+  // ─────────────────────────────────────────────────────────────────────
+  // CONTEXT AT TIME OF RECOMMENDATION
+  // Used to correlate: does context actually improve recommendations?
+  // ─────────────────────────────────────────────────────────────────────
+  contextData         Json     // { temperature, humidity, cloudiness, timeOfDay, season, ... }
+  
+  // User's reported mood/context when recommendation was made (optional)
+  userReportedContext String?  // "focus", "relaxation", "walking", "nighttime", etc.
+  
+  // Timestamps
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  @@index([userId, recommendationId])
+  @@index([userId, createdAt])
+  @@index([spotifyAlbumId])
+}
+
+model AlbumAudioAnalysis {
+  id                  String   @id @default(cuid())
+  spotifyAlbumId      String   @unique
+  spotifyUrl          String?                     // Album Spotify link
+  albumName           String                      // Album title for reference
+  artist              String                      // Artist name for reference
+  imageUrl            String?                     // Album cover image
+  
+  // Source tracking
+  analysisSource      String   @default("acousticbrainz") // "acousticbrainz" | "essentia"
+  
+  // Raw audio features from AcousticBrainz (exact API response)
+  // All values are 0-1 scale unless otherwise noted
+  audioFeatures       Json     // {
+                              //   danceability: 0.0-1.0,
+                              //   energy: 0.0-1.0,
+                              //   loudness: dB (-60 to 0),
+                              //   speechiness: 0.0-1.0,
+                              //   acousticness: 0.0-1.0,
+                              //   instrumentalness: 0.0-1.0,
+                              //   liveness: 0.0-1.0,
+                              //   valence: 0.0-1.0,
+                              //   tempo: BPM (0-300),
+                              //   mode: 0 (minor) or 1 (major),
+                              //   key: 0-11
+                              // }
+  
+  // Mapped 9 emotional dimensions (0-1 scale, derived from audioFeatures)
+  emotionalDimensions Json     // {
+                              //   nature: 0.0-1.0,
+                              //   introspection: 0.0-1.0,
+                              //   movement: 0.0-1.0,
+                              //   healing: 0.0-1.0,
+                              //   melancholy: 0.0-1.0,
+                              //   freedom: 0.0-1.0,
+                              //   energyLevel: 0.0-1.0,
+                              //   coziness: 0.0-1.0,
+                              //   dreaminess: 0.0-1.0
+                              // }
+  
+  // Metadata
+  fetchedAt         DateTime @default(now())     // When audio analysis was cached
+  
+  @@index([spotifyAlbumId])
+}
+

@@ -1,0 +1,101 @@
+/**
+ * Spotify API Client Factory
+ * 
+ * Creates axios instances for Spotify API calls with authentication and error handling.
+ * All requests include Bearer token and error interception for token expiration.
+ * 
+ * @category Utils
+ * @module utils/spotify-client
+ */
+
+import axios, { AxiosInstance } from "axios";
+
+const SPOTIFY_BASE_URL = "https://api.spotify.com/v1";
+
+/**
+ * Create an axios instance configured for Spotify API
+ * 
+ * Automatically adds Bearer token to all requests and handles 401 errors.
+ * 
+ * @param {string} accessToken - Valid Spotify OAuth access token
+ * @returns {AxiosInstance} Configured axios with Spotify authentication
+ * @throws {Error} "Spotify token invalid or expired" on 401 response
+ * 
+ * @example
+ * const client = createSpotifyClient(accessToken);
+ * const profile = await client.get('/me');
+ */
+export function createSpotifyClient(accessToken?: string): AxiosInstance {
+  if (!accessToken) {
+    throw new Error("Spotify access token is required");
+  }
+  
+  console.log(`[SPOTIFY-CLIENT] Creating client with token:`, {
+    tokenLength: accessToken.length,
+    tokenStart: accessToken.substring(0, 20),
+    tokenEnd: accessToken.substring(accessToken.length - 10)
+  });
+  
+  const client = axios.create({
+    baseURL: SPOTIFY_BASE_URL,
+    timeout: 30000, // Increased from 10s to 30s to handle slow Spotify servers
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  // Add request interceptor for logging
+  client.interceptors.request.use(
+    (config) => {
+      const authHeader = config.headers.Authorization as string;
+      console.log(`[SPOTIFY-CLIENT] Request:`, {
+        method: config.method,
+        url: config.url,
+        headers: {
+          Authorization: authHeader ? authHeader.substring(0, 30) + '...' : 'NONE'
+        }
+      });
+      return config;
+    }
+  );
+
+  // Add response interceptor for error handling
+  client.interceptors.response.use(
+    (response) => {
+      console.log(`[SPOTIFY-CLIENT] Response:`, {
+        status: response.status,
+        url: response.config.url
+      });
+      return response;
+    },
+    (error) => {
+      console.error(`[SPOTIFY-CLIENT] Response Error:`, {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        url: error.config?.url,
+        data: error.response?.data,
+        retryAfter: error.response?.headers?.['retry-after']
+      });
+      
+      if (error.response?.status === 429) {
+        // Rate limited by Spotify
+        const retryAfter = error.response?.headers?.['retry-after'] || 60;
+        throw new Error(`Spotify rate limit exceeded. Retry after ${retryAfter}s`);
+      }
+      
+      if (error.response?.status === 401) {
+        // Token expired or invalid
+        throw new Error("Spotify token invalid or expired");
+      }
+      
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        throw new Error("Spotify API timeout - server may be overloaded or blocking requests");
+      }
+      
+      throw error;
+    }
+  );
+
+  return client;
+}

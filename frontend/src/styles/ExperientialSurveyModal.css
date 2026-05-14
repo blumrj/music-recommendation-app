@@ -1,0 +1,322 @@
+/**
+ * EXPERIENTIAL SURVEY MODAL STYLES
+ * Windows 95/XP Classic Style
+ */
+
+.experiential-survey-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.experiential-survey-modal {
+  background: linear-gradient(180deg, #c0c0c0 0%, #dfdfdf 100%);
+  border: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.5),
+              inset -1px -1px 0 rgba(0, 0, 0, 0.3),
+              0 4px 12px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 550px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  overflow: hidden;
+  font-family: 'MS Sans Serif', Arial, sans-serif;
+  font-size: 11px;
+}
+
+/* Header with album art and info */
+.experiential-survey-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px;
+  background: linear-gradient(90deg, #3B2B5E 0%, #9B8CB8 100%);
+  border-bottom: 1px solid #3B2B5E;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.experiential-survey-album-art {
+  width: 50px;
+  height: 50px;
+  border: 2px solid white;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.experiential-survey-album-info {
+  flex: 1;
+  min-width: 0;
+  color: white;
+}
+
+.experiential-survey-album-info h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.experiential-survey-album-info p {
+  margin: 2px 0 0 0;
+  font-size: 11px;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.experiential-survey-close {
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+  padding: 2px 4px;
+  font-size: 10px;
+  cursor: pointer;
+  font-weight: bold;
+  color: black;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.experiential-survey-close:active {
+  border-color: #808080 #dfdfdf #dfdfdf #808080;
+  background: #bfbfbf;
+}
+
+/* Main content area */
+.experiential-survey-content {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 12px;
+  background: #c0c0c0;
+}
+
+.experiential-survey-intro {
+  padding: 8px 0 12px 0;
+  text-align: center;
+}
+
+.experiential-survey-intro h4 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  font-weight: bold;
+  color: black;
+}
+
+.experiential-survey-intro p {
+  margin: 0;
+  font-size: 11px;
+  color: #333;
+}
+
+/* Slider Groups */
+.experiential-slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.experiential-slider-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.experiential-slider-label {
+  font-weight: bold;
+  font-size: 11px;
+  color: black;
+  display: block;
+}
+
+.experiential-slider-description {
+  font-size: 10px;
+  color: #333;
+  margin: 0;
+  line-height: 1.3;
+}
+
+/* Slider Container */
+.experiential-slider-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.experiential-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+  color: #333;
+  font-weight: normal;
+}
+
+.experiential-slider-left {
+  text-align: left;
+  flex: 1;
+}
+
+.experiential-slider-right {
+  text-align: right;
+  flex: 1;
+}
+
+/* Windows 95 Style Slider */
+.experiential-slider-input {
+  width: 100%;
+  height: 4px;
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.5),
+              inset -1px -1px 0 rgba(0, 0, 0, 0.3);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.experiential-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(180deg, #dfdfdf 0%, #c0c0c0 100%);
+  border: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+  cursor: pointer;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.8),
+              inset -1px -1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.experiential-slider-input::-webkit-slider-thumb:active {
+  border-color: #808080 #dfdfdf #dfdfdf #808080;
+}
+
+.experiential-slider-input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(180deg, #dfdfdf 0%, #c0c0c0 100%);
+  border: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+  cursor: pointer;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.8),
+              inset -1px -1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.experiential-slider-input::-moz-range-thumb:active {
+  border-color: #808080 #dfdfdf #dfdfdf #808080;
+}
+
+.experiential-slider-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Slider Value Display */
+.experiential-slider-value {
+  text-align: center;
+  font-size: 10px;
+  color: #333;
+  font-weight: normal;
+  height: 12px;
+}
+
+/* Buttons */
+.experiential-survey-buttons {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border-top: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+  justify-content: flex-end;
+  background: #c0c0c0;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.experiential-survey-btn {
+  padding: 4px 12px;
+  border: 2px solid;
+  border-color: #dfdfdf #808080 #808080 #dfdfdf;
+  background: linear-gradient(180deg, #dfdfdf 0%, #c0c0c0 100%);
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  font-family: 'MS Sans Serif', Arial, sans-serif;
+  color: black;
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.experiential-survey-btn:active:not(:disabled) {
+  border-color: #808080 #dfdfdf #dfdfdf #808080;
+  background: linear-gradient(180deg, #c0c0c0 0%, #dfdfdf 100%);
+}
+
+.experiential-survey-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.experiential-survey-btn-primary {
+  min-width: 80px;
+}
+
+.experiential-survey-btn-secondary {
+  min-width: 60px;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .experiential-survey-modal {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .experiential-survey-header {
+    gap: 6px;
+    padding: 4px;
+  }
+
+  .experiential-survey-album-art {
+    width: 42px;
+    height: 42px;
+  }
+
+  .experiential-survey-content {
+    padding: 10px;
+  }
+
+  .experiential-survey-buttons {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .experiential-survey-btn {
+    padding: 3px 8px;
+    font-size: 10px;
+    min-width: 50px;
+  }
+}

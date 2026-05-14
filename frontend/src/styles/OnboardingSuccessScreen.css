@@ -1,0 +1,41 @@
+/**
+ * ONBOARDING SUCCESS SCREEN STYLES
+ * Windows XP themed styling for success screen
+ */
+
+.success-container {
+  font-family: 'MS Sans Serif', Arial, sans-serif;
+  background: linear-gradient(180deg, #3B2B5E 0%, #9B8CB8 100%);
+}
+
+.success-window {
+  /* Windows XP window style */
+  box-shadow: 
+    inset 1px 1px 0 0 #dfdfdf,
+    inset -1px -1px 0 0 #808080,
+    1px 1px 0 0 #ffffff,
+    -1px -1px 0 0 #000000;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .success-container {
+    padding: 8px;
+  }
+
+  .success-window {
+    max-width: 100%;
+  }
+}
