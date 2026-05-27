@@ -34,28 +34,3 @@ export interface SaveSurveyDTO {
   density_response?: number;          // 0=Sparse, 100=Rich/Layered
   groundedness_response?: number;     // 0=Dreamy, 100=Grounded/Real
 }
-
-/**
- * Result of analyzing survey data
- * Contains 9 emotional dimensions (0-1 scale) and metadata
- * Returned from service -> controller -> frontend
- */
-export interface EmotionalAnalysisDTO {
-  emotionalProfile: {
-    nature: number;
-    introspection: number;
-    movement: number;
-    healing: number;
-    melancholy: number;
-    freedom: number;
-    energyLevel: number;
-    coziness: number;
-    dreaminess: number;
-  };
-  dominantThemes: string[];
-  userType: string;
-  preferredContexts: string[];
-  preferredMovements: string[];
-  seasonalPreference: string | null;
-  insights: string | null;
-}

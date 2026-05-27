@@ -64,19 +64,6 @@ export interface FormattedAlbumDTO {
 }
 
 /**
- * Data required to save an album to user's favorites
- * Sent from frontend -> controller -> service -> database
- */
-export interface SaveFavoriteDTO {
-  userId: string;
-  albumSpotifyId: string;
-  albumName: string;
-  artist: string;
-  imageUrl: string;
-  spotifyUrl: string;
-}
-
-/**
  * Spotify OAuth token response
  * Returned when exchanging authorization code or refreshing tokens
  */

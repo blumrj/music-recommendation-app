@@ -4,12 +4,10 @@
  * Handles database and Spotify API operations for albums.
  * 
  * Key responsibilities:
- * - Manage user favorites (save, remove, retrieve)
  * - Fetch saved albums from Spotify
  * - Handle album surveys and analysis
  * 
  * Data persistence:
- * - Favorites: User's marked favorite albums
  * - Surveys: User's emotional feedback about albums
  * 
  * External APIs:
@@ -20,7 +18,7 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import { SpotifyAlbumsResponseDTO, FormattedAlbumDTO, SaveFavoriteDTO } from "../../types/spotify.dto";
+import { SpotifyAlbumsResponseDTO, FormattedAlbumDTO } from "../../types/spotify.dto";
 import { createSpotifyClient } from "../../infrastructure/spotify/spotify-client";
 
 /**
@@ -38,117 +36,6 @@ const prisma = new PrismaClient();
  * @class AlbumService
  */
 export class AlbumService {
-  /**
-   * Get all favorite albums for a specific user
-   * 
-   * Retrieves the complete list of albums the user has marked as favorites.
-   * Results are ordered by most recent first.
-   * 
-   * @async
-   * @param {string} userId - The user's unique identifier
-   * 
-   * @returns {Promise<Array<Object>>} Array of Favorite records
-   * @returns {string} returns[].id - Favorite record ID
-   * @returns {string} returns[].userId - User who favorited
-   * @returns {string} returns[].albumSpotifyId - Spotify album ID
-   * @returns {string} returns[].albumName - Album title
-   * @returns {string} returns[].artist - Artist name
-   * @returns {string} returns[].imageUrl - Album cover URL
-   * @returns {string} returns[].spotifyUrl - Spotify link
-   * @returns {string} returns[].createdAt - When favorited
-   * 
-   * @example
-   * const favorites = await albumService.getUserFavorites(userId);
-   * console.log(favorites.length); // Number of favorite albums
-   */
-  async getUserFavorites(userId: string) {
-    const favorites = await prisma.favorite.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
-    return favorites;
-  }
-
-  /**
-   * Save an album to user's favorites (create or update if already exists)
-   * 
-   * Adds album to favorites collection using upsert pattern.
-   * If already favorited, does nothing (empty update).
-   * If not favorited, creates new favorite record.
-   * 
-   * @async
-   * @param {Object} data - SaveFavoriteDTO
-   * @param {string} data.userId - The user's unique identifier
-   * @param {string} data.albumSpotifyId - Spotify album ID (unique key)
-   * @param {string} data.albumName - Album title
-   * @param {string} data.artist - Primary artist name
-   * @param {string} data.imageUrl - Album cover image URL
-   * @param {string} data.spotifyUrl - Direct link to Spotify
-   * 
-   * @returns {Promise<Object>} Favorite record
-   * @returns {string} returns.id - Favorite record ID
-   * @returns {string} returns.userId - User who favorited
-   * @returns {string} returns.albumSpotifyId - Spotify album ID
-   * @returns {string} returns.createdAt - When created
-   * 
-   * @example
-   * const favorite = await albumService.saveFavorite({
-   *   userId,
-   *   albumSpotifyId: "spotify_id",
-   *   albumName: "Title",
-   *   artist: "Artist",
-   *   imageUrl: "url",
-   *   spotifyUrl: "spotify_url"
-   * });
-   */
-  async saveFavorite(data: SaveFavoriteDTO) {
-    const favorite = await prisma.favorite.upsert({
-      where: {
-        userId_albumSpotifyId: {
-          userId: data.userId,
-          albumSpotifyId: data.albumSpotifyId,
-        },
-      },
-      // If favorite already exists, do nothing (empty update)
-      update: {},
-      // If favorite doesn't exist, create it with full data
-      create: {
-        userId: data.userId,
-        albumSpotifyId: data.albumSpotifyId,
-        albumName: data.albumName,
-        artist: data.artist,
-        imageUrl: data.imageUrl,
-        spotifyUrl: data.spotifyUrl,
-      },
-    });
-    return favorite;
-  }
-
-  /**
-   * Remove an album from user's favorites
-   * 
-   * Deletes all favorite records matching user + album combination.
-   * Safe to call even if album isn't favorited.
-   * 
-   * @async
-   * @param {string} userId - The user's unique identifier
-   * @param {string} albumSpotifyId - Spotify album ID to remove
-   * 
-   * @returns {Promise<void>} No return value, just deletes the record
-   * 
-   * @example
-   * await albumService.removeFavorite(userId, albumSpotifyId);
-   * // Album is now removed from favorites
-   */
-  async removeFavorite(userId: string, albumSpotifyId: string) {
-    await prisma.favorite.deleteMany({
-      where: {
-        userId,
-        albumSpotifyId,
-      },
-    });
-  }
-
   /**
    * Fetch user's saved albums from Spotify API
    * 

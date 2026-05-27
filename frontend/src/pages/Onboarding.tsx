@@ -6,9 +6,6 @@ import { ProgressBar, SliderInput, Modal, AlbumIcon } from "../components";
 import type { Album, SliderResponses } from "../types";
 import type { EmotionalDimension } from "../services/api";
 
-// ⚠️ SET TO FALSE TO USE REAL API LOGIC
-const DEMO_MODE = true;
-
 // Default response values (neutral midpoint for all dimensions)
 const DEFAULT_RESPONSES: SliderResponses = {
   valence: 50,
@@ -28,44 +25,7 @@ const transformResponsesToSurveyData = (responses: SliderResponses): Record<stri
   }, {} as Record<string, number>);
 };
 
-// Hardcoded albums for development/testing
-const DEMO_ALBUMS: Album[] = [
-  {
-    spotifyId: "1",
-    name: "The Dark Side of the Moon",
-    artist: "Pink Floyd",
-    imageUrl: "",
-    spotifyUrl: "https://open.spotify.com/album/1",
-  },
-  {
-    spotifyId: "2",
-    name: "Rumours",
-    artist: "Fleetwood Mac",
-    imageUrl: "",
-    spotifyUrl: "https://open.spotify.com/album/2",
-  },
-  {
-    spotifyId: "3",
-    name: "Abbey Road",
-    artist: "The Beatles",
-    imageUrl: "",
-    spotifyUrl: "https://open.spotify.com/album/3",
-  },
-  {
-    spotifyId: "4",
-    name: "Led Zeppelin IV",
-    artist: "Led Zeppelin",
-    imageUrl: "",
-    spotifyUrl: "https://open.spotify.com/album/4",
-  },
-  {
-    spotifyId: "5",
-    name: "Hotel California",
-    artist: "Eagles",
-    imageUrl: "",
-    spotifyUrl: "https://open.spotify.com/album/5",
-  },
-];
+
 
 // Constants
 const MIN_SURVEYS_REQUIRED = 5;
@@ -88,16 +48,8 @@ export default function Onboarding() {
   const [dimensionsLoading, setDimensionsLoading] = useState(true);
   const [surveyLoading, setSurveyLoading] = useState(false);
 
-  // DEMO MODE: Skip all checks and show survey immediately
+  // Load user profile and albums for survey
   useEffect(() => {
-    if (DEMO_MODE) {
-      setSavedAlbums(DEMO_ALBUMS);
-      setShowSurvey(true);
-      setLoadingProfile(false);
-      return;
-    }
-
-    // REAL MODE: Check if user needs onboarding, load albums, and start survey
     if (loading) return;
 
     const checkAndStartOnboarding = async () => {

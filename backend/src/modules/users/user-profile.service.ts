@@ -79,19 +79,8 @@ class UserProfileService {
       // Support both old and new survey formats for backward compatibility
       const surveys = await prisma.albumSurvey.findMany({
         where: { userId },
-        select: {
-          spotifyAlbumId: true,
-          albumName: true,
-          artist: true,
-          imageUrl: true,
-          // PHASE 1: New 7D survey responses (0-100 scale) - may be null for old surveys
-          valence_response: true,
-          arousal_response: true,
-          tension_response: true,
-          warmth_response: true,
-          intimacy_response: true,
-          density_response: true,
-          groundedness_response: true
+        include: {
+          album: true  // Include album data for metadata
         }
       });
 
@@ -109,26 +98,26 @@ class UserProfileService {
       for (const survey of surveys) {
         try {
           // Get or compute actual 13D embedding from Last.fm tags
-          console.log(`[PROFILE] [ALBUM ${successCount + 1}] Retrieving embedding for "${survey.albumName}"...`);
-          let actualEmbedding = await albumEmbeddingService.getEmbedding(survey.spotifyAlbumId);
+          console.log(`[PROFILE] [ALBUM ${successCount + 1}] Retrieving embedding for "${survey.album.title}"...`);
+          let actualEmbedding = await albumEmbeddingService.getEmbedding(survey.album.spotifyId);
 
           // If not cached, compute from Last.fm
           if (!actualEmbedding) {
-            console.log(`[PROFILE] [ALBUM ${successCount + 1}] Cache miss for "${survey.albumName}" - computing from Last.fm...`);
+            console.log(`[PROFILE] [ALBUM ${successCount + 1}] Cache miss for "${survey.album.title}" - computing from Last.fm...`);
             
             // Compute and cache embedding from Last.fm tags (no Spotify needed)
             const embedding = await albumEmbeddingService.getOrComputeEmbedding(
-              survey.spotifyAlbumId,
+              survey.album.spotifyId,
               {},  // Empty object - not used for Last.fm-only approach
               {
-                albumName: survey.albumName,
-                artist: survey.artist,
-                imageUrl: survey.imageUrl
+                albumName: survey.album.title,
+                artist: survey.album.artist,
+                imageUrl: survey.album.imageUrl || undefined
               }
             );
             actualEmbedding = embedding;
           } else {
-            console.log(`[PROFILE] [ALBUM ${successCount + 1}] ✓ Cache HIT for "${survey.albumName}"`);
+            console.log(`[PROFILE] [ALBUM ${successCount + 1}] ✓ Cache HIT for "${survey.album.title}"`);
           }
 
           // Get perceived profile from sliders
@@ -150,7 +139,7 @@ class UserProfileService {
           successCount++;
 
           if (successCount <= 2) {
-            console.log(`[PROFILE] Album ${successCount}: ${survey.albumName}`, {
+            console.log(`[PROFILE] Album ${successCount}: ${survey.album.title}`, {
               actual_valence: actualEmbedding.valence.toFixed(2),
               perceived_valence: perceivedProfile.valence.toFixed(2),
               deviation: deviation.valence.toFixed(2)
@@ -158,7 +147,7 @@ class UserProfileService {
           }
         } catch (error: any) {
           console.warn(
-            `[PROFILE] Warning: Could not process ${survey.albumName}: ${error.message}`
+            `[PROFILE] Warning: Could not process ${survey.album.title}: ${error.message}`
           );
           // Continue with next survey
         }
@@ -257,19 +246,11 @@ class UserProfileService {
           bias_groundedness: bias.groundedness,
           
           albumsAnalyzed: surveyCount,
-          // Keep legacy 9D at neutral for backward compat
-          nature: 0.5,
-          healing: 0.5,
-          melancholy: 0.5,
-          freedom: 0.5,
-          energyLevel: 0.5,
-          coziness: 0.5,
-          dreaminess: 0.5
+          updatedAt: new Date()
         }
       });
 
       console.log(`[PROFILE] ✓ SAVED both layers (${surveyCount} albums analyzed)`);
-      console.log(`[PROFILE]   LAYER 1 - Intrinsic Taste Profile:`);
       console.log(`[PROFILE]     valence=${taste.valence.toFixed(2)}, arousal=${taste.arousal.toFixed(2)}, tension=${taste.tension.toFixed(2)}`);
       console.log(`[PROFILE]     warmth=${taste.warmth.toFixed(2)}, intimacy=${taste.intimacy.toFixed(2)}, density=${taste.density.toFixed(2)}, groundedness=${taste.groundedness.toFixed(2)}`);
       console.log(`[PROFILE]   LAYER 2 - Perception Bias Profile:`);
@@ -310,10 +291,11 @@ class UserProfileService {
 
 
   /**
-   * Convert 6 survey slider responses to 13D emotional vector
+   * Convert survey slider responses to 13D emotional vector
    * 
    * MAPPING STRATEGY:
-   * The 6 sliders cover 6 of the 13 dimensions.
+   * The 7 sliders (valence, arousal, tension, warmth, intimacy, density, groundedness)
+   * map directly to 7 of the 13 dimensions.
    * Unknown dimensions set to 0.5 (neutral).
    * 
    * SLIDER INTERPRETATION:

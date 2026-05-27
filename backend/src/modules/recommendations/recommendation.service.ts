@@ -171,30 +171,9 @@ class RecommendationService {
    * @returns {Promise<number>} History score [0, 1]
    */
   private async computeHistoryScore(spotifyAlbumId: string, userId?: string): Promise<number> {
-    if (!userId) return 0.5; // Neutral if no user
-
-    try {
-      // Check if user has saved this album before
-      const favorite = await prisma.favorite.findFirst({
-        where: {
-          userId,
-          albumSpotifyId: spotifyAlbumId
-        }
-      });
-
-      if (!favorite) return 0.3; // Not saved = low history score
-
-      // If saved: score based on recency (older saves = lower novelty, but they like it)
-      const daysSinceSave = Math.floor(
-        (Date.now() - favorite.createdAt.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      // Score: 0.7 if saved recently, down to 0.5 if saved long ago
-      return Math.max(0.5, 0.7 - (daysSinceSave / 365) * 0.2);
-    } catch (error: any) {
-      console.warn("[PHASE4-S2] History score error:", error.message);
-      return 0.5;
-    }
+    // Favorite table removed - return neutral score for all albums
+    // TODO: When implementing album feedback feature, use RecommendationFeedback table instead
+    return 0.5;
   }
 
   /**
@@ -213,11 +192,19 @@ class RecommendationService {
     if (!userId) return 0.7; // Assume novel if no user
 
     try {
+      // First find the album by spotifyId
+      const album = await prisma.album.findUnique({
+        where: { spotifyId: spotifyAlbumId },
+        select: { id: true }
+      });
+
+      if (!album) return 1.0; // Album not in catalog = fully novel
+
       // Check most recent recommendation of this album to user
       const recentRec = await prisma.recommendation.findFirst({
         where: {
           userId,
-          spotifyId: spotifyAlbumId
+          albumId: album.id
         },
         orderBy: {
           generatedAt: "desc"
@@ -503,17 +490,20 @@ class RecommendationService {
             userId,
             generatedAt: { gte: today }
           },
-          take: 10
+          take: 10,
+          include: {
+            album: true  // Include album to get metadata
+          }
         });
 
         if (cached.length >= 10) {
           console.log("[MAIN] ✓ Found cached recommendations");
           const cachedRecommendations = cached.map((r) => ({
-            id: r.spotifyId,
-            name: r.title,
-            artist: r.artist,
-            image: r.imageUrl,
-            spotifyUrl: r.spotifyUrl,
+            id: r.album.spotifyId,
+            name: r.album.title,
+            artist: r.album.artist,
+            image: r.album.imageUrl,
+            spotifyUrl: r.album.spotifyUrl,
             cached: true
           }));
 
@@ -679,18 +669,38 @@ class RecommendationService {
           const spotifyBacked = topRecommendations.filter(rec => rec.id);
           
           if (spotifyBacked.length > 0) {
-            await prisma.recommendation.createMany({
-              data: spotifyBacked.map((rec) => ({
+            // Create recommendations with albumId instead of raw album data
+            const recsToCreate = [];
+            
+            for (const rec of spotifyBacked) {
+              // Find or create album in global catalog
+              let album = await prisma.album.findUnique({
+                where: { spotifyId: rec.id! }
+              });
+              
+              if (!album) {
+                album = await prisma.album.create({
+                  data: {
+                    spotifyId: rec.id!,
+                    title: rec.name,
+                    artist: rec.artist,
+                    imageUrl: rec.image || undefined,
+                    spotifyUrl: rec.spotifyUrl || undefined
+                  }
+                });
+              }
+              
+              recsToCreate.push({
                 userId,
-                spotifyId: rec.id!,
-                title: rec.name,
-                artist: rec.artist,
-                imageUrl: rec.image || "",
-                spotifyUrl: rec.spotifyUrl || "",
+                albumId: album.id,
                 lat,
                 lon,
                 generatedAt: new Date()
-              }))
+              });
+            }
+            
+            await prisma.recommendation.createMany({
+              data: recsToCreate
             });
             console.log(`[MAIN]   ✓ ${spotifyBacked.length} cached (${topRecommendations.length - spotifyBacked.length} Last.fm-only, not cached)`);
           } else {

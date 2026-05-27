@@ -425,17 +425,38 @@ class AlbumEmbeddingService {
   ): Promise<AlbumEmbedding> {
     const albumLabel = `"${metadata?.albumName}" by ${metadata?.artist}` || spotifyAlbumId;
     
+    // STEP 0: Ensure Album record exists in global catalog
+    let album = null;
+    if (spotifyAlbumId) {
+      album = await prisma.album.findUnique({
+        where: { spotifyId: spotifyAlbumId }
+      });
+      
+      if (!album) {
+        // Create album if it doesn't exist
+        album = await prisma.album.create({
+          data: {
+            spotifyId: spotifyAlbumId,
+            title: metadata?.albumName || "Unknown",
+            artist: metadata?.artist || "Unknown",
+            imageUrl: metadata?.imageUrl,
+            spotifyUrl: metadata?.spotifyUrl
+          }
+        });
+      }
+    }
+    
     // Try to fetch cached embedding from database
     console.log(`[EMBEDDING] Checking database cache for ${albumLabel}...`);
     
     let cached = null;
-    if (spotifyAlbumId) {
-      // Only query cache if we have a valid spotifyAlbumId
+    if (album?.id) {
+      // Query cache using albumId instead of spotifyAlbumId
       cached = await prisma.albumEmotionalEmbedding.findUnique({
-        where: { spotifyAlbumId },
+        where: { albumId: album.id },
       });
     } else {
-      console.log(`[EMBEDDING] No spotifyAlbumId provided - skipping cache lookup`);
+      console.log(`[EMBEDDING] No album ID - skipping cache lookup`);
     }
 
     if (cached) {
@@ -444,10 +465,10 @@ class AlbumEmbeddingService {
       return this.prismaToEmbedding(cached);
     }
 
-    if (spotifyAlbumId) {
+    if (album?.id) {
       console.log(`[EMBEDDING] ✗ CACHE MISS for ${albumLabel} - RECOMPUTING from Last.fm`);
     } else {
-      console.log(`[EMBEDDING] No spotifyAlbumId - computing from Last.fm for ${albumLabel}`);
+      console.log(`[EMBEDDING] No album ID - computing from Last.fm for ${albumLabel}`);
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -521,12 +542,17 @@ class AlbumEmbeddingService {
       };
     }
 
-    // STEP 2B: Store in database (write all 7D fields + deprecated fields for schema compatibility)
+    // STEP 2B: Store in database (write all 7D fields)
     console.log(`[EMBEDDING] Storing embedding in database for ${albumLabel}...`);
+    
+    if (!album?.id) {
+      console.log(`[EMBEDDING] ⚠️  No album ID - cannot store embedding`);
+      throw new Error("Cannot store embedding without album ID");
+    }
     
     const embedding = await prisma.albumEmotionalEmbedding.create({
       data: {
-        spotifyAlbumId,
+        albumId: album.id,
         valence: embedmentResult.embedding.valence,
         arousal: embedmentResult.embedding.arousal,
         tension: embedmentResult.embedding.tension,
@@ -534,20 +560,10 @@ class AlbumEmbeddingService {
         intimacy: embedmentResult.embedding.intimacy,
         density: embedmentResult.embedding.density,
         groundedness: embedmentResult.embedding.groundedness,
-        // DEPRECATED FIELDS: Set to 0.5 (neutral) for backward compatibility with schema
-        spaciousness: 0.5,
-        organicSynthetic: 0.5,
-        nostalgia: 0.5,
-        introspection: 0.5,
-        movement: 0.5,
         derivedFrom: "lastfm",  // Changed from "audioFeatures"
         confidence: embedmentResult.confidence || 0.5,  // Use confidence from signal fusion
-        albumName: metadata?.albumName,
-        artist: metadata?.artist,
-        imageUrl: metadata?.imageUrl,
-        spotifyUrl: metadata?.spotifyUrl,
-        tags: embedmentResult.tags && embedmentResult.tags.length > 0 ? JSON.parse(JSON.stringify(embedmentResult.tags)) : undefined,
         enrichmentStatus: embedmentResult.enrichmentStatus,
+        tags: embedmentResult.tags && embedmentResult.tags.length > 0 ? JSON.parse(JSON.stringify(embedmentResult.tags)) : undefined
       },
     });
 
@@ -569,8 +585,16 @@ class AlbumEmbeddingService {
    * @throws {Error} On database errors
    */
   async getEmbedding(spotifyAlbumId: string): Promise<AlbumEmbedding | null> {
+    // Find album by spotifyId, then query embedding by albumId
+    const album = await prisma.album.findUnique({
+      where: { spotifyId: spotifyAlbumId }
+    });
+
+    if (!album) return null;
+
     const embedding = await prisma.albumEmotionalEmbedding.findUnique({
-      where: { spotifyAlbumId },
+      where: { albumId: album.id },
+      include: { album: true }
     });
 
     return embedding ? this.prismaToEmbedding(embedding) : null;
@@ -580,12 +604,13 @@ class AlbumEmbeddingService {
    * Convert Prisma model to API representation
    * 
    * @private
-   * @param {AlbumEmotionalEmbedding} prismaModel - Prisma model
+   * @param {AlbumEmotionalEmbedding & {album}} prismaModel - Prisma model with album relation
    * @returns {AlbumEmbedding} API representation
    */
-  private prismaToEmbedding(prismaModel: AlbumEmotionalEmbedding): AlbumEmbedding {
+  private prismaToEmbedding(prismaModel: any): AlbumEmbedding {
+    const album = prismaModel.album;
     return {
-      spotifyAlbumId: prismaModel.spotifyAlbumId,
+      spotifyAlbumId: album?.spotifyId || "",
       valence: prismaModel.valence,
       arousal: prismaModel.arousal,
       tension: prismaModel.tension,
@@ -593,10 +618,10 @@ class AlbumEmbeddingService {
       intimacy: prismaModel.intimacy,
       density: prismaModel.density,
       groundedness: prismaModel.groundedness,
-      albumName: prismaModel.albumName ?? undefined,
-      artist: prismaModel.artist ?? undefined,
-      imageUrl: prismaModel.imageUrl ?? undefined,
-      spotifyUrl: prismaModel.spotifyUrl ?? undefined,
+      albumName: album?.title ?? undefined,
+      artist: album?.artist ?? undefined,
+      imageUrl: album?.imageUrl ?? undefined,
+      spotifyUrl: album?.spotifyUrl ?? undefined,
       derivedFrom: prismaModel.derivedFrom as "audioFeatures" | "surveys" | "collaborative" | "hybrid" | "lastfm",
       confidence: prismaModel.confidence,
       tags: (prismaModel.tags as any) ?? undefined,

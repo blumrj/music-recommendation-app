@@ -55,11 +55,9 @@ class SurveyController {
    * @param {string} req.body.imageUrl - Album cover URL (optional)
    * 
    * PHASE 1 FORMAT (Preferred):
-   * @param {number} req.body.intimacy_response - 0-100, where 0=intimate, 100=distant
    * @param {number} req.body.warmth_response - 0-100, where 0=warm, 100=cold
    * @param {number} req.body.groundedness_response - 0-100, where 0=grounded, 100=dreamy
    * @param {number} req.body.arousal_response - 0-100, where 0=calm, 100=energized
-   * @param {number} req.body.introspection_response - 0-100, where 0=reflective, 100=external
    * @param {number} req.body.density_response - 0-100, where 0=dense, 100=sparse
    * 
    * PHASE 0 FORMAT (Backward compatibility):
@@ -89,11 +87,9 @@ class SurveyController {
    *   albumName: "Album Title",
    *   artist: "Artist Name",
    *   imageUrl: "url...",
-   *   intimacy_response: 35,
    *   warmth_response: 72,
    *   groundedness_response: 45,
    *   arousal_response: 60,
-   *   introspection_response: 55,
    *   density_response: 48
    * }
    * 

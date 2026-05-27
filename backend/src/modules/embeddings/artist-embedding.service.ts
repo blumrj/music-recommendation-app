@@ -128,12 +128,14 @@ class ArtistEmbeddingService {
     console.log(`[ARTIST-EMBEDDING] Querying DB for artist: ${originalName}`);
 
     try {
-      // Query all albums by artist
+      // Query all albums by artist - need to join Album table
       const albums = await prisma.albumEmotionalEmbedding.findMany({
         where: {
-          artist: {
-            equals: originalName,
-            mode: "insensitive"  // Case-insensitive matching
+          album: {
+            artist: {
+              equals: originalName,
+              mode: "insensitive"  // Case-insensitive matching
+            }
           }
         },
         select: {
@@ -143,12 +145,7 @@ class ArtistEmbeddingService {
           warmth: true,
           intimacy: true,
           density: true,
-          spaciousness: true,
-          organicSynthetic: true,
-          nostalgia: true,
           groundedness: true,
-          introspection: true,
-          movement: true,
           confidence: true
         }
       });
@@ -176,12 +173,7 @@ class ArtistEmbeddingService {
           warmth: album.warmth,
           intimacy: album.intimacy,
           density: album.density,
-          spaciousness: album.spaciousness,
-          organicSynthetic: album.organicSynthetic,
-          nostalgia: album.nostalgia,
-          groundedness: album.groundedness,
-          introspection: album.introspection,
-          movement: album.movement
+          groundedness: album.groundedness
         }))
       );
 

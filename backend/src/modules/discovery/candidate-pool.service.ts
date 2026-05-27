@@ -210,13 +210,13 @@ class CandidatePoolService {
     console.log(`[POOL-FILTER]   Duplicates removed: ${current.length} → ${noDupes.length}`);
     current = noDupes;
     
-    // Filter 2: Remove albums user already saved
+    // Filter 2: Remove albums user already saved to Spotify
+    // Note: Album is now global catalog, so we need to fetch all albums by spotifyId
     console.log(`[POOL-FILTER]   Filtering already-saved albums...`);
-    const savedAlbums = await prisma.favorite.findMany({
-      where: { userId },
-      select: { albumSpotifyId: true }
+    const allAlbums = await prisma.album.findMany({
+      select: { spotifyId: true }
     });
-    const savedIds = new Set(savedAlbums.map(s => s.albumSpotifyId));
+    const savedIds = new Set(allAlbums.map(a => a.spotifyId));
     
     const notSaved = current.filter(album => {
       if (album.spotifyAlbumId && savedIds.has(album.spotifyAlbumId)) {
@@ -231,9 +231,15 @@ class CandidatePoolService {
     console.log(`[POOL-FILTER]   Filtering already-surveyed albums...`);
     const surveyedAlbums = await prisma.albumSurvey.findMany({
       where: { userId },
-      select: { spotifyAlbumId: true }
+      select: { albumId: true }
     });
-    const surveyedIds = new Set(surveyedAlbums.map(s => s.spotifyAlbumId));
+    // Get spotifyIds for surveyed albums by joining with Album table
+    const surveyedAlbumIds = surveyedAlbums.map(s => s.albumId);
+    const surveyedAlbumsData = await prisma.album.findMany({
+      where: { id: { in: surveyedAlbumIds } },
+      select: { spotifyId: true }
+    });
+    const surveyedIds = new Set(surveyedAlbumsData.map(a => a.spotifyId));
     
     const notSurveyed = current.filter(album => {
       if (album.spotifyAlbumId && surveyedIds.has(album.spotifyAlbumId)) {

@@ -22,7 +22,7 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import { SaveSurveyDTO, EmotionalAnalysisDTO } from "../../types/survey.dto";
+import { SaveSurveyDTO } from "../../types/survey.dto";
 import { FormattedAlbumDTO } from "../../types/spotify.dto";
 import { albumService } from "../recommendations/albums.service";
 import { albumClusteringService } from "../embeddings/album-clustering.service";
@@ -160,15 +160,35 @@ class SurveyService {
       }
 
       // Upsert prevents duplicate surveys for same user+album
+      // First, find or create the Album record with spotifyAlbumId
+      let album = await prisma.album.findUnique({
+        where: { spotifyId: params.spotifyAlbumId }
+      });
+      
+      if (!album) {
+        // Create album if it doesn't exist yet
+        album = await prisma.album.create({
+          data: {
+            spotifyId: params.spotifyAlbumId,
+            title: params.albumName,
+            artist: params.artist,
+            imageUrl: params.imageUrl
+          }
+        });
+      }
+
       const survey = await prisma.albumSurvey.upsert({
         where: {
-          userId_spotifyAlbumId: {
+          userId_albumId: {
             userId: params.userId,
-            spotifyAlbumId: params.spotifyAlbumId
+            albumId: album.id
           }
         },
         update: updateData,
-        create: createData
+        create: {
+          ...createData,
+          albumId: album.id
+        }
       });
 
       console.log(`[SURVEY] Phase 1 survey saved for album ${params.spotifyAlbumId}:`, {
@@ -282,15 +302,18 @@ class SurveyService {
         where: { userId }, // Filter by user
         orderBy: { createdAt: "desc" }, // Most recent first
         take: limit, // Limit to requested number
+        include: {
+          album: true  // Join with Album to get title, artist, etc.
+        }
       });
 
       // STAGE 2: Transform survey records to FormattedAlbumDTO
       return surveys.map((survey) => ({
-        spotifyId: survey.spotifyAlbumId, // Spotify album ID from survey
-        name: survey.albumName, // Album name saved in survey
-        artist: survey.artist, // Artist name saved in survey
-        imageUrl: survey.imageUrl, // Album cover saved in survey
-        spotifyUrl: `https://open.spotify.com/album/${survey.spotifyAlbumId}`, // Construct Spotify link
+        spotifyId: survey.album.spotifyId,
+        name: survey.album.title,
+        artist: survey.album.artist,
+        imageUrl: survey.album.imageUrl || "",  // Default to empty string if null
+        spotifyUrl: survey.album.spotifyUrl || `https://open.spotify.com/album/${survey.album.spotifyId}`,
       }));
     } catch (error) {
       console.error("Error fetching surveyed albums:", error);

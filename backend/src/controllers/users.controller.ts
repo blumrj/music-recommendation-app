@@ -74,12 +74,7 @@ export class UserController {
           warmth: profile.warmth,
           intimacy: profile.intimacy,
           density: profile.density,
-          spaciousness: profile.spaciousness,
-          organicSynthetic: profile.organicSynthetic,
-          nostalgia: profile.nostalgia,
           groundedness: profile.groundedness,
-          introspection: profile.introspection,
-          movement: profile.movement,
           albumsAnalyzed: profile.albumsAnalyzed,
         } : null,
       });

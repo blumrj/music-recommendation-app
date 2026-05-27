@@ -9,10 +9,9 @@
  * - Enables analytics: which dimensions matter? which embeddings changed?
  * 
  * ARCHITECTURE:
- * Queries albums from three sources:
+ * Queries albums from two sources:
  * 1. Album table (saved albums)
  * 2. AlbumSurvey table (surveyed albums)
- * 3. Favorite table (favorited albums)
  * 
  * For each album:
  * - Fetch/use default audio features
@@ -49,7 +48,6 @@ class BatchEmbeddingService {
    * Queries all unique albums from:
    * - Album table (user-saved albums)
    * - AlbumSurvey table (surveyed albums)
-   * - Favorite table (favorited albums)
    * 
    * De-duplicates by Spotify album ID, then computes/caches embeddings.
    * 
@@ -163,10 +161,9 @@ class BatchEmbeddingService {
   /**
    * Fetch all unique albums from database
    * 
-   * Queries three sources and de-duplicates:
+   * Queries two sources and de-duplicates:
    * - Album table (user-saved albums)
    * - AlbumSurvey table (surveyed albums)
-   * - Favorite table (favorited albums)
    * 
    * @private
    * @async
@@ -210,54 +207,32 @@ class BatchEmbeddingService {
     try {
       const surveyed = await prisma.albumSurvey.findMany({
         select: {
-          spotifyAlbumId: true,
-          albumName: true,
-          artist: true,
-          imageUrl: true
+          albumId: true,
+          album: {
+            select: {
+              spotifyId: true,
+              title: true,
+              artist: true,
+              imageUrl: true
+            }
+          }
         }
       });
 
-      for (const album of surveyed) {
-        if (album.spotifyAlbumId && !seen.has(album.spotifyAlbumId)) {
-          seen.add(album.spotifyAlbumId);
+      for (const survey of surveyed) {
+        if (survey.album.spotifyId && !seen.has(survey.album.spotifyId)) {
+          seen.add(survey.album.spotifyId);
           albums.push({
-            spotifyId: album.spotifyAlbumId,
-            name: album.albumName,
-            artist: album.artist,
-            imageUrl: album.imageUrl || undefined
+            spotifyId: survey.album.spotifyId,
+            name: survey.album.title,
+            artist: survey.album.artist,
+            imageUrl: survey.album.imageUrl || undefined
           });
         }
       }
       console.log(`[BATCH] Found ${surveyed.length} from AlbumSurvey table`);
     } catch (error: any) {
       console.warn(`[BATCH] Failed to fetch from AlbumSurvey table:`, error.message);
-    }
-
-    // SOURCE 3: Favorite table (favorited albums)
-    try {
-      const favorites = await prisma.favorite.findMany({
-        select: {
-          albumSpotifyId: true,
-          albumName: true,
-          artist: true,
-          imageUrl: true
-        }
-      });
-
-      for (const album of favorites) {
-        if (album.albumSpotifyId && !seen.has(album.albumSpotifyId)) {
-          seen.add(album.albumSpotifyId);
-          albums.push({
-            spotifyId: album.albumSpotifyId,
-            name: album.albumName,
-            artist: album.artist,
-            imageUrl: album.imageUrl || undefined
-          });
-        }
-      }
-      console.log(`[BATCH] Found ${favorites.length} from Favorite table`);
-    } catch (error: any) {
-      console.warn(`[BATCH] Failed to fetch from Favorite table:`, error.message);
     }
 
     console.log(`[BATCH] Total unique albums: ${albums.length}`);

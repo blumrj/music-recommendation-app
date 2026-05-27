@@ -61,8 +61,7 @@ export class UserService {
    */
   async getUserById(userId: string) {
     const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { albums: true },
+      where: { id: userId }
     });
     return user;
   }

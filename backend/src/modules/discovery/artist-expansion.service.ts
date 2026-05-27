@@ -42,6 +42,9 @@ class ArtistExpansionService {
   /**
    * Get all artists from user's saved albums
    * 
+   * NOTE: Favorite table removed. Returned empty map as no saved albums exist in current schema.
+   * TODO: When implementing album favorites feature, replace with Album table query
+   * 
    * @private
    * @async
    * @param {string} userId - User ID
@@ -49,34 +52,8 @@ class ArtistExpansionService {
    * @returns {Promise<Map<string, Date>>} Map of artist → last saved date
    */
   private async getSavedAlbumArtists(userId: string): Promise<Map<string, Date>> {
-    try {
-      const favorites = await prisma.favorite.findMany({
-        where: { userId },
-        select: {
-          artist: true,
-          createdAt: true
-        }
-      });
-      
-      const artists = new Map<string, Date>();
-      
-      for (const fav of favorites) {
-        const artist = fav.artist;
-        if (artist) {
-          // Keep latest date
-          const existing = artists.get(artist);
-          if (!existing || fav.createdAt > existing) {
-            artists.set(artist, fav.createdAt);
-          }
-        }
-      }
-      
-      console.log(`[ARTIST-EXP] Found ${artists.size} unique artists in saved albums`);
-      return artists;
-    } catch (error: any) {
-      console.error(`[ARTIST-EXP] Error getting saved album artists:`, error.message);
-      return new Map();
-    }
+    // Favorite table no longer exists - return empty map
+    return new Map();
   }
 
   /**
@@ -94,18 +71,22 @@ class ArtistExpansionService {
         where: { userId },
         select: {
           createdAt: true,
-          artist: true
+          album: {
+            select: {
+              artist: true
+            }
+          }
         }
       });
       
       const artists = new Map<string, Date>();
       
       for (const survey of surveys) {
-        if (survey.artist) {
+        if (survey.album?.artist) {
           // Keep latest date
-          const existing = artists.get(survey.artist);
+          const existing = artists.get(survey.album.artist);
           if (!existing || survey.createdAt > existing) {
-            artists.set(survey.artist, survey.createdAt);
+            artists.set(survey.album.artist, survey.createdAt);
           }
         }
       }
