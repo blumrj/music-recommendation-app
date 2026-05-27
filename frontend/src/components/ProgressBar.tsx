@@ -15,10 +15,19 @@ interface ProgressBarProps {
   label?: string; // Optional label text above the bar
   description?: string; // Optional description text above the bar
   percentage?: number; // Optional percentage to display (defaults to value if not provided)
-  width?: string; // Optional custom width
+  width?: string; // Optional custom width (default: 100%)
+  height?: string; // Optional custom height (default: 16px from 98.css)
+  barColor?: 'accent' | 'warmth' | 'grounded' | 'tension'; // Color variant (default: accent)
   className?: string; // Optional additional classes
   indeterminate?: boolean; // Force indeterminate mode
 }
+
+const colorMap: Record<string, string> = {
+  accent: 'var(--color-accent)',
+  warmth: 'var(--color-warmth)',
+  grounded: 'var(--color-grounded)',
+  tension: 'var(--color-tension)',
+};
 
 export const ProgressBar: React.FC<ProgressBarProps> = ({
   value,
@@ -26,6 +35,8 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   description,
   percentage,
   width = '100%',
+  height = '16px',
+  barColor = 'accent',
   className = '',
   indeterminate = false,
 }) => {
@@ -35,6 +46,9 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   // Clamp value between 0-100 if provided
   const clampedValue = value !== undefined ? Math.max(0, Math.min(100, value)) : undefined;
   const displayPercentage = percentage ?? clampedValue;
+  
+  // Get color for this instance
+  const barColorValue = colorMap[barColor] || colorMap.accent;
 
   return (
     <div className={className}>
@@ -55,11 +69,20 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
           )}
         </div>
       )}
-      <div className={`98 ${isIndeterminate ? 'progress-indeterminate' : ''}`} style={{ width }}>
+      
+      <div 
+        className="98 w-full"
+        style={{ width, '--progress-height': height, '--progress-color': barColorValue } as React.CSSProperties}
+      >
         {isIndeterminate ? (
-          <progress></progress>
+          // Retro animated indeterminate progress bar
+          <div className="progress-bar-indeterminate">
+            {/* Animated striped bar */}
+            <div className="progress-bar-stripes" />
+          </div>
         ) : (
-          <progress max="100" value={clampedValue}></progress>
+          // Determinate progress with native element
+          <progress max="100" value={clampedValue} className="progress-bar-determinate" />
         )}
       </div>
     </div>

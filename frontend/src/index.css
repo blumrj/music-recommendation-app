@@ -58,14 +58,58 @@ body {
   color: var(--color-text-primary);
 }
 
-/* Animated progress bar for indeterminate state */
-@keyframes progress-animation {
+/* Retro Win98-style progress bar animation with discrete jumps */
+@keyframes progress-retro-stripes {
   0% {
-    background-position: 0 0;
+    left: -30%;
+  }
+  20% {
+    left: 0%;
+  }
+  40% {
+    left: 15%;
+  }
+  60% {
+    left: 35%;
+  }
+  80% {
+    left: 65%;
   }
   100% {
-    background-position: 40px 0;
+    left: 100%;
   }
+}
+
+/* Indeterminate progress bar container */
+.progress-bar-indeterminate {
+  height: var(--progress-height, 16px);
+  background-color: var(--color-primary);
+  border: 2px inset var(--color-dark-gray);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Animated striped bar inside indeterminate progress */
+.progress-bar-stripes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 30%;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--progress-color),
+    var(--progress-color) 4px,
+    rgba(255, 255, 255, 0.3) 4px,
+    rgba(255, 255, 255, 0.3) 8px
+  );
+  animation: progress-retro-stripes 2.5s steps(5, end) infinite;
+}
+
+/* Determinate progress bar styling */
+.progress-bar-determinate {
+  height: var(--progress-height, 16px);
+  width: 100%;
 }
 
 @layer utilities {
@@ -110,17 +154,5 @@ body {
   margin: 0 !important;
   padding: 12px !important;
   background-color: var(--color-primary) !important;
-}
-
-.progress-indeterminate progress {
-  background-image: linear-gradient(
-    90deg,
-    var(--color-accent) 0%,
-    var(--color-accent) 50%,
-    var(--color-accent-secondary) 50%,
-    var(--color-accent-secondary) 100%
-  );
-  background-size: 40px 100%;
-  animation: progress-animation 1.5s linear infinite;
 }
 

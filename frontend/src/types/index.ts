@@ -65,6 +65,8 @@ export interface RecommendationsResponse {
     condition: string;
     temp: number;
     humidity: number;
+    season?: string;
+    timeOfDay?: string;
   };
   recommendations?: Recommendation[];
   genres?: GenreCollection[];

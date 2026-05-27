@@ -6,6 +6,7 @@ import { useRecommendations } from "../context/RecommendationsContext";
 import {
   AlbumGrid,
   ProgressBar,
+  Modal,
 } from "../components";
 import type { Recommendation, RecommendationsResponse, GenreCollection } from "../types";
 import { parseApiError } from "../utils/helpers";
@@ -13,11 +14,20 @@ import { parseApiError } from "../utils/helpers";
 export default function Home() {
   const navigate = useNavigate();
   const { loading, user } = useAuth();
-  const { genres, setGenres, currentView } = useRecommendations();
+  const { setGenres } = useRecommendations();
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Weather icon paths
+  const WEATHER_ICONS = {
+    condition: "/win98-icons/kodak_imaging-0.png",
+    temperature: "/win98-icons/tree-0.png",
+    humidity: "/win98-icons/tip.png",
+    timeOfDay: "/win98-icons/clock-1.png",
+    season: "/win98-icons/calendar-2.png",
+  };
 
   // Check if user needs onboarding on first load
   useEffect(() => {
@@ -36,7 +46,7 @@ export default function Home() {
         setLoadingProfile(false);
         // Auto-fetch recommendations for returning users
         handleGetRecommendations();
-      } catch (err) {
+      } catch {
         // If profile check fails, just continue to home
         setLoadingProfile(false);
       }
@@ -56,12 +66,12 @@ export default function Home() {
           const { latitude, longitude } = position.coords;
           await fetchRecommendationsAtLocation(latitude, longitude);
         },
-        (_err) => {
+        () => {
           setError("Please enable location access to get recommendations");
           setLoadingRecommendations(false);
         }
       );
-    } catch (_err) {
+    } catch {
       setError("An error occurred");
       setLoadingRecommendations(false);
     }
@@ -78,26 +88,14 @@ export default function Home() {
     }
   };
 
-  const displayAlbums = (recommendations?.recommendations || recommendations?.tracks || []).slice(0, 20);
-  const displayGenres = recommendations?.genres || [];
+  const displayAlbums = (recommendations?.recommendations || recommendations?.tracks || []).slice(0, 10);
 
   // Sync genres to context when recommendations change
   useEffect(() => {
-    if (displayGenres.length > 0) {
-      setGenres(displayGenres as GenreCollection[]);
+    if (recommendations?.genres && recommendations.genres.length > 0) {
+      setGenres(recommendations.genres as GenreCollection[]);
     }
-  }, [displayGenres, setGenres]);
-
-  // Get albums to display based on current view
-  const getDisplayAlbums = () => {
-    if (typeof currentView === "string" && currentView === "picks") {
-      return displayAlbums;
-    } else if (typeof currentView === "object" && currentView.type === "genre") {
-      // Use genres from context which is synced from recommendations
-      return genres[currentView.index]?.albums || [];
-    }
-    return [];
-  };
+  }, [recommendations?.genres, setGenres]);
 
   // Show loading while checking auth and profile
   if (loading || loadingProfile) {
@@ -128,30 +126,81 @@ export default function Home() {
         </div>
       )}
 
-      {!loadingRecommendations && (
+      {!loadingRecommendations && recommendations && (
         <>
-          {recommendations?.weather && (
-            <div className="mb-md text-text-secondary">
-              <span className="text-sm">
-                🌤️ {recommendations.weather.condition} - {recommendations.weather.temp}°C
-              </span>
-            </div>
-          )}
-        </>
-      )}
+          {/* Albums Modal */}
+          <Modal
+            title="Albums you might like today"
+            onClose={() => {}}
+            overlay={false}
+            initialX={30}
+            initialY={100}
+            initialWidth={460}
+            initialHeight="auto"
+            showClose={false}
+          >
+            <AlbumGrid
+              albums={(displayAlbums as Recommendation[])}
+              onAlbumClick={(album) => {
+                const spotifyUrl = "spotifyUrl" in album ? album.spotifyUrl : "";
+                if (spotifyUrl) {
+                  window.open(spotifyUrl, "_blank");
+                }
+              }}
+              empty={displayAlbums.length === 0}
+              emptyMessage="No albums to display"
+            />
+          </Modal>
 
-      {recommendations && (
-        <AlbumGrid
-          albums={(getDisplayAlbums() as Recommendation[])}
-          onAlbumClick={(album) => {
-            const spotifyUrl = "spotifyUrl" in album ? album.spotifyUrl : "";
-            if (spotifyUrl) {
-              window.open(spotifyUrl, "_blank");
-            }
-          }}
-          empty={getDisplayAlbums().length === 0}
-          emptyMessage="No albums to display"
-        />
+          {/* Weather Modal */}
+          <Modal
+            title="Today's Weather"
+            onClose={() => {}}
+            overlay={false}
+            initialX={900}
+            initialY={100}
+            initialWidth={400}
+            initialHeight="auto"
+            showClose={false}
+          >
+            <div className="p-4 flex flex-wrap gap-6">
+              {/* Condition */}
+              <div className="flex flex-col items-center text-center">
+                <img src={WEATHER_ICONS.condition} alt="Condition" className="w-8 h-8 mb-2" />
+                <p className="text-xs text-gray-500 font-semibold">Condition</p>
+                <p className="text-sm text-text-primary">{recommendations.weather?.condition}</p>
+              </div>
+
+              {/* Temperature */}
+              <div className="flex flex-col items-center text-center">
+                <img src={WEATHER_ICONS.temperature} alt="Temperature" className="w-8 h-8 mb-2" />
+                <p className="text-xs text-gray-500 font-semibold">Temp</p>
+                <p className="text-sm text-text-primary">{recommendations.weather?.temp}°C</p>
+              </div>
+
+              {/* Humidity */}
+              <div className="flex flex-col items-center text-center">
+                <img src={WEATHER_ICONS.humidity} alt="Humidity" className="w-8 h-8 mb-2" />
+                <p className="text-xs text-gray-500 font-semibold">Humidity</p>
+                <p className="text-sm text-text-primary">{recommendations.weather?.humidity}%</p>
+              </div>
+
+              {/* Time of Day */}
+              <div className="flex flex-col items-center text-center">
+                <img src={WEATHER_ICONS.timeOfDay} alt="Time of Day" className="w-8 h-8 mb-2" />
+                <p className="text-xs text-gray-500 font-semibold">Time</p>
+                <p className="text-sm text-text-primary capitalize">{recommendations.weather?.timeOfDay || "N/A"}</p>
+              </div>
+
+              {/* Season */}
+              <div className="flex flex-col items-center text-center">
+                <img src={WEATHER_ICONS.season} alt="Season" className="w-8 h-8 mb-2" />
+                <p className="text-xs text-gray-500 font-semibold">Season</p>
+                <p className="text-sm text-text-primary capitalize">{recommendations.weather?.season || "N/A"}</p>
+              </div>
+            </div>
+          </Modal>
+        </>
       )}
     </main>
   );
