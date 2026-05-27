@@ -1,86 +1,43 @@
 import { useState, useEffect } from "react";
-import { Box, Typography, CircularProgress } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 import { apiClient } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useRecommendations } from "../context/RecommendationsContext";
-import AlbumIcon from "../components/AlbumIcon";
-import { OnboardingSurveyWizard } from "../components/OnboardingSurveyWizard";
-import { OnboardingSuccessScreen } from "../components/OnboardingSuccessScreen";
-
-interface Album {
-  spotifyId: string;
-  name: string;
-  artist: string;
-  imageUrl: string;
-  spotifyUrl?: string;
-}
-
-interface Recommendation {
-  id: string;
-  name: string;
-  artist: string;
-  image: string;
-  spotifyUrl: string;
-}
-
-interface GenreCollection {
-  name: string;
-  albums: Recommendation[];
-}
-
-interface RecommendationsData {
-  mood?: string;
-  weather?: {
-    condition: string;
-    temp: number;
-    humidity: number;
-  };
-  recommendations?: Recommendation[];
-  genres?: GenreCollection[];
-  tracks?: Recommendation[];
-}
+import {
+  AlbumGrid,
+  ProgressBar,
+} from "../components";
+import type { Recommendation, RecommendationsResponse, GenreCollection } from "../types";
+import { parseApiError } from "../utils/helpers";
 
 export default function Home() {
+  const navigate = useNavigate();
   const { loading, user } = useAuth();
   const { genres, setGenres, currentView } = useRecommendations();
   const [loadingProfile, setLoadingProfile] = useState(true);
-  const [showWizard, setShowWizard] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [savedAlbums, setSavedAlbums] = useState<Album[]>([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
-  const [recommendations, setRecommendations] = useState<RecommendationsData | null>(null);
+  const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if user needs onboarding
+  // Check if user needs onboarding on first load
   useEffect(() => {
-    if (loading) return; // Wait for auth check
+    if (loading) return;
 
     const checkOnboarding = async () => {
       try {
-        setLoadingProfile(true);
         const profile = await apiClient.getUserProfile();
-
+        
+        // If user needs onboarding, redirect to onboarding page
         if (profile.needsOnboarding && !profile.profileGenerated && profile.surveyCount === 0) {
-          // Brand new user: fetch their saved albums
-          try {
-            const albumsResponse = await apiClient.getAvailableAlbumsForSurvey();
-            const albums = (albumsResponse.albums as Album[]) || [];
-            setSavedAlbums(albums);
-            setShowWizard(true);
-          } catch (err) {
-            setError("Failed to load your saved albums. Please try again.");
-            setShowWizard(true);
-          }
-        } else {
-          // User has profile or is returning - skip wizard
-          setShowWizard(false);
-          handleGetRecommendations();
+          navigate("/onboarding", { replace: true });
+          return;
         }
-      } catch (err) {
-        // If profile check fails, default to showing home
-        setShowWizard(false);
+
+        setLoadingProfile(false);
+        // Auto-fetch recommendations for returning users
         handleGetRecommendations();
-      } finally {
+      } catch (err) {
+        // If profile check fails, just continue to home
         setLoadingProfile(false);
       }
     };
@@ -113,22 +70,9 @@ export default function Home() {
   const fetchRecommendationsAtLocation = async (latitude: number, longitude: number) => {
     try {
       const data = await apiClient.getRecommendations(latitude, longitude, user?.id);
-      setRecommendations(data);
+      setRecommendations(data as RecommendationsResponse);
     } catch (err: unknown) {
-      let errorMsg = "Failed to fetch music recommendations";
-      if (err && typeof err === 'object' && 'response' in err) {
-        const error = err as Record<string, unknown>;
-        const response = error.response as Record<string, unknown>;
-        const data = response?.data as Record<string, unknown>;
-        if (data?.error) {
-          errorMsg = String(data.error);
-        } else if ('message' in error) {
-          errorMsg = `Error: ${error.message}`;
-        }
-      } else if (err instanceof Error) {
-        errorMsg = `Error: ${err.message}`;
-      }
-      setError(errorMsg);
+      setError(parseApiError(err) || "Failed to fetch music recommendations");
     } finally {
       setLoadingRecommendations(false);
     }
@@ -140,7 +84,7 @@ export default function Home() {
   // Sync genres to context when recommendations change
   useEffect(() => {
     if (displayGenres.length > 0) {
-      setGenres(displayGenres);
+      setGenres(displayGenres as GenreCollection[]);
     }
   }, [displayGenres, setGenres]);
 
@@ -158,126 +102,59 @@ export default function Home() {
   // Show loading while checking auth and profile
   if (loading || loadingProfile) {
     return (
-      <Box
-        sx={{
-          height: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#A89080",
-        }}
-      >
-        <CircularProgress sx={{ color: "#fff" }} />
-      </Box>
+      <main className="h-full overflow-auto relative bg-secondary p-md">
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <ProgressBar indeterminate label="Loading recommendations..." width="200px" />
+        </div>
+      </main>
     );
   }
 
-  // Show onboarding wizard for new users
-  if (showWizard) {
-    return (
-      <OnboardingSurveyWizard
-        albums={savedAlbums}
-        onComplete={() => {
-          setShowWizard(false);
-          setShowSuccess(true);
-        }}
-        onSkip={() => {
-          setShowWizard(false);
-          handleGetRecommendations();
-        }}
-      />
-    );
-  }
-
-  // Show success screen after profile is created
-  if (showSuccess) {
-    return (
-      <OnboardingSuccessScreen
-        onContinue={() => {
-          setShowSuccess(false);
-          handleGetRecommendations();
-        }}
-      />
-    );
-  }
-
-  // Normal home page (for returning users or after onboarding)
+  // Normal home page - show recommendations
   return (
-    <Box
-      sx={{
-        height: "100%",
-        background: "#A89080",
-        overflow: "auto",
-        padding: "16px",
-        position: "relative",
-      }}
-    >
+    <main className="h-full overflow-auto relative bg-secondary p-md">
       {error && (
-        <Box sx={{ color: "red", marginBottom: "16px" }}>
-          <Typography variant="body2">{error}</Typography>
-        </Box>
+        <div className="p-4 bg-[#f8d7da] border border-[#999] rounded mb-4">
+          <p className="text-tension text-xs font-bold mb-2">❌ {error}</p>
+          <button onClick={handleGetRecommendations} className="button px-3 py-1 text-xs">
+            Retry
+          </button>
+        </div>
       )}
 
       {loadingRecommendations && (
-        <Box
-          sx={{
-            height: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <CircularProgress sx={{ color: "#fff" }} />
-        </Box>
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <ProgressBar indeterminate label="Fetching recommendations..." width="200px" />
+        </div>
       )}
 
       {!loadingRecommendations && (
         <>
           {recommendations?.weather && (
-            <Box sx={{ marginBottom: "16px", color: "#333" }}>
-              <Typography variant="caption">
-                🌤️ {recommendations.weather.condition} - {recommendations.weather.temp}°C - {recommendations.mood}
-              </Typography>
-            </Box>
+            <div className="mb-md text-text-secondary">
+              <span className="text-sm">
+                🌤️ {recommendations.weather.condition} - {recommendations.weather.temp}°C
+              </span>
+            </div>
           )}
-
-          {/* Display current view's albums */}
-          {typeof currentView === "string" && currentView === "picks" && (
-            <Typography variant="subtitle2" sx={{ marginBottom: "12px", color: "#333", fontWeight: "bold" }}>
-              Today's Picks in {recommendations?.weather?.condition}
-            </Typography>
-          )}
-          {typeof currentView === "object" && currentView.type === "genre" && (
-            <Typography variant="subtitle2" sx={{ marginBottom: "12px", color: "#333", fontWeight: "bold" }}>
-              {genres[currentView.index]?.name.charAt(0).toUpperCase() + genres[currentView.index]?.name.slice(1)}
-            </Typography>
-          )}
-
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(60px, 1fr))",
-              gap: "16px",
-              paddingBottom: "16px",
-            }}
-          >
-            {getDisplayAlbums().map((album) => (
-              <AlbumIcon
-                key={album.id}
-                name={album.name}
-                artist={album.artist}
-                image={album.image}
-                onClick={() => {
-                  if (album.spotifyUrl) {
-                    window.open(album.spotifyUrl, "_blank");
-                  }
-                }}
-              />
-            ))}
-          </Box>
         </>
       )}
-    </Box>
+
+      {recommendations && (
+        <AlbumGrid
+          albums={(getDisplayAlbums() as Recommendation[])}
+          onAlbumClick={(album) => {
+            const spotifyUrl = "spotifyUrl" in album ? album.spotifyUrl : "";
+            if (spotifyUrl) {
+              window.open(spotifyUrl, "_blank");
+            }
+          }}
+          empty={getDisplayAlbums().length === 0}
+          emptyMessage="No albums to display"
+        />
+      )}
+    </main>
   );
 }
+
 

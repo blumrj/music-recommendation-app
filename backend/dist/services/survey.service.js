@@ -24,9 +24,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.surveyService = void 0;
 const client_1 = require("@prisma/client");
-const albums_service_1 = require("./albums.service");
+const album_1 = require("./album");
 const user_profile_service_1 = require("./user-profile.service");
-const album_clustering_service_1 = require("./album-clustering.service");
 const prisma = new client_1.PrismaClient();
 /**
  * Survey Service
@@ -316,7 +315,7 @@ class SurveyService {
     async getAvailableAlbumsForSurvey(accessToken, userId, limit = 15) {
         try {
             // STAGE 1: Fetch all saved albums from Spotify
-            const savedAlbums = await albums_service_1.albumService.getSavedAlbumsFromSpotify(accessToken, limit * 2); // Get more for clustering
+            const savedAlbums = await album_1.albumService.getSavedAlbumsFromSpotify(accessToken, limit * 2); // Get more for clustering
             // STAGE 2: Get already-surveyed albums
             const surveyedAlbums = await this.getSurveyedAlbums(userId);
             const surveyedIds = new Set(surveyedAlbums.map(a => a.spotifyId));
@@ -328,7 +327,7 @@ class SurveyService {
             }
             // STAGE 4: Use clustering to select emotionally-diverse anchors (NEW - PHASE 0)
             console.log(`[SURVEY] Using clustering to select emotionally-diverse survey albums...`);
-            const anchorAlbums = await album_clustering_service_1.albumClusteringService.selectSurveyAlbums(availableAlbums.map(a => ({
+            const anchorAlbums = await album_1.albumClusteringService.selectSurveyAlbums(availableAlbums.map(a => ({
                 spotifyAlbumId: a.spotifyId,
                 albumName: a.name,
                 artist: a.artist,
@@ -347,184 +346,6 @@ class SurveyService {
             console.error("Error getting available albums for survey:", error);
             throw error;
         }
-    }
-    /**
-     * PRIVATE: Analyze emotional profile from surveys
-     *
-     * @private
-     * @param {Array<Object>} surveys - Survey records from database
-     *
-     * @returns {EmotionalAnalysisDTO} 9D emotional profile analysis
-     *
-     * Analyzes surveys to extract emotional dimensions (0-1 scale):
-     * 1. movement - How much user wants to move/dance
-     * 2. energyLevel - Intensity and vibrancy of preferred music
-     * 3. melancholy - Preference for emotional/sad music
-     * 4. coziness - Preference for warm/intimate sound
-     * 5. introspection - Preference for reflective/thoughtful music
-     * 6. dreaminess - Preference for ethereal/otherworldly sound
-     * 7. nature - Preference for organic/acoustic vibes
-     * 8. healing - Preference for soothing/therapeutic music
-     * 9. freedom - Preference for expansive/liberating sound
-     *
-     * Algorithm:
-     * - Extract movementPreference as direct dimension score
-     * - Match keywords in emotions array to dimension keywords
-     * - Match keywords in vibe array to dimension keywords
-     * - Accumulate scores across all surveys
-     * - Normalize to 0-1 scale by dividing by survey count
-     * - Return neutral 0.5 profile if no surveys exist
-     *
-     * Note: dominantThemes, userType, preferences are set to defaults.
-     * Future enhancement: Extract more insights from survey patterns.
-     *
-     * @example
-     * const analysis = this.analyzeEmotionalProfile(surveys);
-     * // analysis.emotionalProfile.movement = 0.75
-     * // analysis.emotionalProfile.nature = 0.45
-     */
-    analyzeEmotionalProfile(surveys) {
-        // Initialize counters for each dimension (higher = more of that quality)
-        let movement = 0; // From movementPreference field
-        let energyLevel = 0; // From vibe matches (energetic, uplifting, etc)
-        let melancholy = 0; // From emotions array (sad, melancholic, etc)
-        let coziness = 0; // From vibe matches (cozy, intimate, warm, etc)
-        let introspection = 0; // From emotions array (reflective, thoughtful, etc)
-        let dreaminess = 0; // From vibe matches (dreamy, ethereal, etc)
-        let nature = 0; // From vibe matches (acoustic, folk, natural, organic)
-        let healing = 0; // From emotions array (comforting, soothing, etc)
-        let freedom = 0; // From vibe matches (uplifting, liberating, expansive, etc)
-        /**
-         * Keyword map for vibe analysis
-         * Each emotional dimension has keywords that trigger it when found in vibe responses
-         */
-        const keywordMap = {
-            movement: ['dance', 'upbeat', 'energetic', 'lively', 'rhythmic'],
-            energyLevel: ['energetic', 'uplifting', 'vibrant', 'powerful', 'intense'],
-            melancholy: ['sad', 'melancholic', 'emotional', 'dark', 'moody'],
-            coziness: ['cozy', 'intimate', 'warm', 'gentle', 'soft'],
-            introspection: ['reflective', 'thoughtful', 'introspective', 'quiet', 'calm'],
-            dreaminess: ['dreamy', 'ethereal', 'mystical', 'cosmic', 'surreal'],
-            nature: ['acoustic', 'folk', 'natural', 'organic'],
-            healing: ['comforting', 'soothing', 'healing', 'chill', 'relaxing'],
-            freedom: ['uplifting', 'liberating', 'expansive', 'free', 'open']
-        };
-        // Process each survey and accumulate scores
-        if (surveys.length > 0) {
-            surveys.forEach((survey) => {
-                // ===== MOVEMENT PREFERENCE =====
-                // Direct values from user's movement preference choice
-                if (survey.movementPreference === 'dance' || survey.movementPreference === 'dance')
-                    movement += 1.0;
-                else if (survey.movementPreference === 'walk')
-                    movement += 0.6;
-                else if (survey.movementPreference === 'slow')
-                    movement += 0.2;
-                // (other values: 'reflect', 'dream', 'relax' - not affecting movement score)
-                // ===== EMOTIONS ANALYSIS =====
-                // User selected emotional responses for the album
-                if (survey.emotions && Array.isArray(survey.emotions)) {
-                    survey.emotions.forEach((emotion) => {
-                        // Convert to lowercase for consistent matching
-                        const emotionLower = emotion.toLowerCase();
-                        // Check for happy/joyful emotions
-                        if (emotionLower.includes('hopeful') || emotionLower.includes('uplifting') || emotionLower.includes('energetic')) {
-                            energyLevel += 0.3;
-                            healing += 0.2;
-                        }
-                        // Check for sad/melancholic emotions
-                        if (emotionLower.includes('melancholic') || emotionLower.includes('peaceful') || emotionLower.includes('sad')) {
-                            melancholy += 0.4;
-                        }
-                        // Check for introspective emotions
-                        if (emotionLower.includes('introspective') || emotionLower.includes('thoughtful')) {
-                            introspection += 0.3;
-                        }
-                        // Check for cozy/comforting emotions
-                        if (emotionLower.includes('cozy') || emotionLower.includes('healing') || emotionLower.includes('comforting')) {
-                            coziness += 0.3;
-                        }
-                    });
-                }
-                // ===== VIBE ANALYSIS =====
-                // User selected vibe descriptors for the album
-                if (survey.vibe && Array.isArray(survey.vibe)) {
-                    // Combine all vibe selections into one searchable string
-                    const vibeText = survey.vibe.join(' ').toLowerCase();
-                    // Check each dimension's keywords in the vibe text
-                    keywordMap.energyLevel.forEach(keyword => {
-                        if (vibeText.includes(keyword))
-                            energyLevel += 0.2;
-                    });
-                    keywordMap.coziness.forEach(keyword => {
-                        if (vibeText.includes(keyword))
-                            coziness += 0.2;
-                    });
-                    keywordMap.dreaminess.forEach(keyword => {
-                        if (vibeText.includes(keyword))
-                            dreaminess += 0.2;
-                    });
-                    keywordMap.nature.forEach(keyword => {
-                        if (vibeText.includes(keyword))
-                            nature += 0.2;
-                    });
-                    keywordMap.healing.forEach(keyword => {
-                        if (vibeText.includes(keyword))
-                            healing += 0.2;
-                    });
-                    keywordMap.freedom.forEach(keyword => {
-                        if (vibeText.includes(keyword))
-                            freedom += 0.2;
-                    });
-                }
-            });
-            // ===== NORMALIZE SCORES =====
-            // Convert accumulated scores to 0-1 scale
-            // Divide by number of surveys so longer histories don't grow unbounded
-            const normalize = (value) => Math.min(value / surveys.length, 1.0);
-            // Return analyzed profile with all dimensions normalized
-            return {
-                emotionalProfile: {
-                    movement: normalize(movement),
-                    energyLevel: normalize(energyLevel),
-                    melancholy: normalize(melancholy),
-                    coziness: normalize(coziness),
-                    introspection: normalize(introspection),
-                    dreaminess: normalize(dreaminess),
-                    nature: normalize(nature),
-                    healing: normalize(healing),
-                    freedom: normalize(freedom)
-                },
-                // TODO: These are not populated yet - could extract from survey data
-                dominantThemes: [],
-                userType: 'music-lover',
-                preferredContexts: [],
-                preferredMovements: [],
-                seasonalPreference: null,
-                insights: null
-            };
-        }
-        // ===== DEFAULT PROFILE =====
-        // If no surveys exist, return neutral profile (all 0.5)
-        return {
-            emotionalProfile: {
-                movement: 0.5,
-                energyLevel: 0.5,
-                melancholy: 0.5,
-                coziness: 0.5,
-                introspection: 0.5,
-                dreaminess: 0.5,
-                nature: 0.5,
-                healing: 0.5,
-                freedom: 0.5
-            },
-            dominantThemes: [],
-            userType: 'music-lover',
-            preferredContexts: [],
-            preferredMovements: [],
-            seasonalPreference: null,
-            insights: null
-        };
     }
     /**
      * Generate and save taste profile for a user

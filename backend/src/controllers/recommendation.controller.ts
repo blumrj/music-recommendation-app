@@ -19,8 +19,8 @@
  */
 
 import { Request, Response } from "express";
-import { recommendationService } from "../services/recommendation.service";
-import { userService } from "../services/users.service";
+import { recommendationService } from "../modules/recommendations/recommendation.service";
+import { userService } from "../modules/users/users.service";
 
 /**
  * Recommendation Controller

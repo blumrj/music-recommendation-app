@@ -28,7 +28,7 @@ const client_1 = require("@prisma/client");
 const artist_expansion_service_1 = require("./artist-expansion.service");
 const lastfm_discovery_service_1 = require("./lastfm-discovery.service");
 const exploration_service_1 = require("./exploration.service");
-const album_embedding_service_1 = require("./album-embedding.service");
+const album_embedding_service_1 = require("./album/album-embedding.service");
 const prisma = new client_1.PrismaClient();
 /**
  * Candidate Pool Service

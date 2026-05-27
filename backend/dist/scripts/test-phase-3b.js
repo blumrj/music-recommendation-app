@@ -48,7 +48,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
 const user_profile_service_1 = require("../services/user-profile.service");
 const survey_service_1 = require("../services/survey.service");
-const album_embedding_service_1 = require("../services/album-embedding.service");
+const album_embedding_service_1 = require("../services/album/album-embedding.service");
 const vectorMath = __importStar(require("../utils/vector-math"));
 const prisma = new client_1.PrismaClient();
 const TEST_USER_ID = "test-phase-3b-user";

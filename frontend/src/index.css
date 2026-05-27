@@ -1,11 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans&display=swap');
+@import "98.css/dist/98.css";
 @import "tailwindcss";
 
+html, body, #root {
+  font-family: 'Pixelify Sans', sans-serif;
+}
+
 @theme {
-  --color-vinyl-brown: #8B6F47;
-  --color-vinyl-tan: #9B8CB8;
-  --color-vinyl-gold: #d4a574;
-  --color-vinyl-light-gold: #e8b88a;
-  --color-vinyl-dark: #6F5D4A;
+  /* ===== GENERAL APP COLORS ===== */
+  --color-primary: #ece9d8;
+  --color-secondary: #a8b8c4;
+  --color-text-primary: #2e3138;
+  --color-text-secondary: #46546a;
+  --color-text-light: #ffffff;
+
+  /* ===== ACCENT COLORS ===== */
+  --color-accent: #5e8b7e;
+  --color-accent-secondary: #8aa7a0;
+
+  /* ===== EMOTIONAL DIMENSION COLORS ===== */
+  --color-warmth: #b08b57;
+  --color-spacious: #7a95b8;
+  --color-grounded: #7b9e87;
+  --color-tension: #88112b;
+
+  /* ===== LEGACY Win98 UI Colors ===== */
+  --color-gray: #c0c0c0;
+  --color-dark-gray: #808080;
+  --color-light-gray: #dfdfdf;
+
+  /* ===== SPACING ===== */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-xxl: 48px;
 }
 
 * {
@@ -15,7 +45,7 @@
 }
 
 html {
-  background-color: var(--color-vinyl-tan);
+  background-color: var(--color-secondary);
 }
 
 body {
@@ -24,7 +54,73 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--color-vinyl-tan);
-  color: #f5f5dc;
+  background-color: var(--color-secondary);
+  color: var(--color-text-primary);
+}
+
+/* Animated progress bar for indeterminate state */
+@keyframes progress-animation {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 40px 0;
+  }
+}
+
+@layer utilities {
+  .bg-gradient-modal {
+    background-image: linear-gradient(90deg, var(--color-accent), var(--color-warmth)) !important;
+  }
+
+  .border-xp-top {
+    border-top: 1px solid var(--color-dark-gray);
+  }
+
+  .border-xp-bottom {
+    border-bottom: 1px solid var(--color-dark-gray);
+  }
+
+  .border-xp-all {
+    border: 1px solid var(--color-dark-gray);
+  }
+
+  /* Override 98.css spacing */
+  .px-xs { padding-left: var(--spacing-xs) !important; padding-right: var(--spacing-xs) !important; }
+  .px-sm { padding-left: var(--spacing-sm) !important; padding-right: var(--spacing-sm) !important; }
+  .px-md { padding-left: var(--spacing-md) !important; padding-right: var(--spacing-md) !important; }
+  .px-lg { padding-left: var(--spacing-lg) !important; padding-right: var(--spacing-lg) !important; }
+  .px-xl { padding-left: var(--spacing-xl) !important; padding-right: var(--spacing-xl) !important; }
+  .px-xxl { padding-left: var(--spacing-xxl) !important; padding-right: var(--spacing-xxl) !important; }
+
+  .py-xs { padding-top: var(--spacing-xs) !important; padding-bottom: var(--spacing-xs) !important; }
+  .py-sm { padding-top: var(--spacing-sm) !important; padding-bottom: var(--spacing-sm) !important; }
+  .py-md { padding-top: var(--spacing-md) !important; padding-bottom: var(--spacing-md) !important; }
+  .py-lg { padding-top: var(--spacing-lg) !important; padding-bottom: var(--spacing-lg) !important; }
+  .py-xl { padding-top: var(--spacing-xl) !important; padding-bottom: var(--spacing-xl) !important; }
+  .py-xxl { padding-top: var(--spacing-xxl) !important; padding-bottom: var(--spacing-xxl) !important; }
+
+  .pt-md { padding-top: var(--spacing-md) !important; }
+  .pb-md { padding-bottom: var(--spacing-md) !important; }
+
+  .mb-md { margin-bottom: var(--spacing-md) !important; }
+}
+
+.window-body {
+  margin: 0 !important;
+  padding: 12px !important;
+  background-color: var(--color-primary) !important;
+}
+
+.progress-indeterminate progress {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-accent) 0%,
+    var(--color-accent) 50%,
+    var(--color-accent-secondary) 50%,
+    var(--color-accent-secondary) 100%
+  );
+  background-size: 40px 100%;
+  animation: progress-animation 1.5s linear infinite;
 }
 

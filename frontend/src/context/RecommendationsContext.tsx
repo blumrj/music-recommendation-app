@@ -1,18 +1,6 @@
 import { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
-
-interface Recommendation {
-  id: string;
-  name: string;
-  artist: string;
-  image: string;
-  spotifyUrl: string;
-}
-
-interface GenreCollection {
-  name: string;
-  albums: Recommendation[];
-}
+import type { GenreCollection } from "../types";
 
 interface RecommendationsContextType {
   currentView: "picks" | { type: "genre"; index: number };

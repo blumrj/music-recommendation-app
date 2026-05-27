@@ -18,8 +18,8 @@
  */
 
 import { Request, Response } from "express";
-import { authService } from "../services/auth.service";
-import { userService } from "../services/users.service";
+import { authService } from "../modules/auth/auth.service";
+import { userService } from "../modules/users/users.service";
 
 /**
  * Authentication Controller

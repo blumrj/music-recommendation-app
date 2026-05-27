@@ -21,7 +21,7 @@
  */
 
 import { Request, Response, NextFunction } from "express";
-import { authService } from "../services/auth.service";
+import { authService } from "../modules/auth/auth.service";
 
 /**
  * JWT Authentication Middleware

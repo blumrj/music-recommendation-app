@@ -5,7 +5,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiClient, type User } from "../services/api";
+import { apiClient } from "../services/api";
+import type { User } from "../types";
 import { redirect } from "react-router-dom";
 
 interface AuthContextType {

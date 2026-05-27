@@ -22,8 +22,8 @@
 
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { surveyService } from "../services/survey.service";
-import { userService } from "../services/users.service";
+import { surveyService } from "../modules/surveys/survey.service";
+import { userService } from "../modules/users/users.service";
 
 const prisma = new PrismaClient();
 

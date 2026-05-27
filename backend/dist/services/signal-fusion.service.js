@@ -59,7 +59,8 @@ const tag_embedding_service_1 = require("./tag-embedding.service");
 const artist_embedding_service_1 = require("./artist-embedding.service");
 const emotional_dimensions_1 = require("../config/emotional-dimensions");
 const genre_priors_1 = require("../config/genre-priors");
-const vectorMath = __importStar(require("../utils/vector-math"));
+const vectorMath = __importStar(require("../shared/math/vector"));
+const vector_1 = require("../shared/math/vector");
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 /**
@@ -183,7 +184,7 @@ class SignalFusionService {
         // STEP 4.5: Apply contrast sharpening
         // Push values away from 0.5 to increase emotional distinctiveness
         // and reduce embedding collapse
-        const sharpened = this.sharpenContrast(blended);
+        const sharpened = (0, vector_1.sharpenContrast)(blended);
         // STEP 5: Calculate confidence (sum of available signal strengths)
         const confidence = this.calculateConfidence(w_emotional, w_genre, w_artist, w_global);
         console.log(`[SIGNAL-FUSION] ✓ Final confidence: ${confidence.toFixed(2)}`);

@@ -23,6 +23,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.contextModifierService = void 0;
+const normalization_1 = require("../shared/math/normalization");
 /**
  * Context Modifier Service
  *
@@ -32,53 +33,99 @@ exports.contextModifierService = void 0;
  */
 class ContextModifierService {
     /**
+     * Determine current time of day based on hour
+     *
+     * @private
+     * @returns {"morning" | "afternoon" | "evening" | "night"} Time period
+     */
+    computeTimeOfDay() {
+        const hour = new Date().getHours();
+        if (hour < 6)
+            return "night";
+        if (hour < 12)
+            return "morning";
+        if (hour < 17)
+            return "afternoon";
+        return "evening";
+    }
+    /**
+     * Determine current season based on month
+     *
+     * @private
+     * @returns {"spring" | "summer" | "autumn" | "winter"} Season
+     */
+    computeSeason() {
+        const month = new Date().getMonth();
+        if (month >= 2 && month < 5)
+            return "spring";
+        if (month >= 5 && month < 8)
+            return "summer";
+        if (month >= 8 && month < 11)
+            return "autumn";
+        return "winter";
+    }
+    /**
+     * Map weather condition to precipitation intensity
+     *
+     * @private
+     * @param {string} condition - OpenWeatherMap condition (e.g., "Rainy", "Sunny")
+     * @returns {number} Intensity 0-1 representing precipitation amount
+     */
+    computePrecipitationIntensity(condition) {
+        if (condition === "Rainy" || condition === "Thunderstorm")
+            return 0.8;
+        if (condition === "Drizzle")
+            return 0.3;
+        if (condition === "Snow")
+            return 0.6;
+        return 0;
+    }
+    /**
      * Compute context modifier from weather and time
      *
-     * MULTI-VARIABLE APPROACH:
-     * Instead of single categories ("rainy", "sunny"), combine:
-     * - Temperature (continuous)
-     * - Precipitation intensity (continuous)
-     * - Cloudiness (continuous)
-     * - Humidity (continuous)
-     * - Visibility (continuous)
-     * - Time of day (categorical but meaningful)
-     * - Season (categorical)
+     * SELF-CONTAINED APPROACH:
+     * Takes only raw weather data and computes all contextual factors internally:
+     * - Current time of day (from system clock)
+     * - Current season (from system clock)
+     * - Precipitation intensity (from weather condition)
      *
-     * Each variable contributes small additive deltas.
+     * Combines these into additive emotional modifiers.
      * Modifiers stay in [-0.3, +0.3] range (soft influence, not override).
      *
      * STRATEGY:
-     * 1. Parse each weather variable
-     * 2. Generate mini-modifier for each
-     * 3. Sum them (multiple factors compound)
-     * 4. Compute overall confidence
-     * 5. Normalize to valid range
+     * 1. Compute time, season, precipitation from raw inputs
+     * 2. Parse each weather variable
+     * 3. Generate mini-modifier for each
+     * 4. Sum them (multiple factors compound)
+     * 5. Compute overall confidence
+     * 6. Normalize to valid range
+     * 7. Return modifiers + computed time/season for consumer use
      *
      * @async
-     * @param {Object} weatherData - Current weather conditions
+     * @param {Object} weatherData - Current weather conditions (raw from API)
      * @param {number} weatherData.temperature - Celsius (-60 to +60 typical)
-     * @param {number} weatherData.precipitationIntensity - 0 (none) to 1 (heavy rain)
+     * @param {string} weatherData.condition - OpenWeatherMap condition (e.g., "Rainy", "Sunny")
      * @param {number} weatherData.cloudiness - 0 (clear) to 1 (overcast)
      * @param {number} weatherData.humidity - 0-100%
      * @param {number} weatherData.visibility - kilometers
-     * @param {"morning"|"afternoon"|"evening"|"night"} weatherData.timeOfDay
-     * @param {"spring"|"summer"|"autumn"|"winter"} weatherData.season
      *
-     * @returns {Promise<ContextModifier>} Additive modifiers (deltas)
+     * @returns {Promise<ContextModifier & {timeOfDay: string, season: string}>} Emotional modifiers + computed context
      *
      * @example
-     * const modifier = await contextModifierService.computeContextModifier({
+     * const result = await contextModifierService.computeContextModifier({
      *   temperature: 5,
-     *   precipitationIntensity: 0.8,
+     *   condition: "Rainy",
      *   cloudiness: 0.9,
      *   humidity: 85,
-     *   visibility: 2,
-     *   timeOfDay: "evening",
-     *   season: "winter"
+     *   visibility: 2
      * });
-     * // Result: { warmth: +0.15, introspection: +0.25, movement: -0.10, ... }
+     * // Result: { warmth: +0.15, introspection: +0.25, ..., timeOfDay: "evening", season: "winter" }
      */
     async computeContextModifier(weatherData) {
+        // Compute contextual factors internally
+        const timeOfDay = this.computeTimeOfDay();
+        const season = this.computeSeason();
+        const precipitationIntensity = this.computePrecipitationIntensity(weatherData.condition);
         // Start with zero modifiers
         const modifier = {};
         // ─────────────────────────────────────────────────────────────────────
@@ -89,36 +136,53 @@ class ContextModifierService {
         // ─────────────────────────────────────────────────────────────────────
         // PRECIPITATION EFFECTS
         // ─────────────────────────────────────────────────────────────────────
-        const precipModifiers = this.computePrecipitationModifiers(weatherData.precipitationIntensity);
-        Object.assign(modifier, this.addModifiers(modifier, precipModifiers));
+        const precipModifiers = this.computePrecipitationModifiers(precipitationIntensity);
+        Object.assign(modifier, (0, normalization_1.addModifiers)(modifier, precipModifiers));
         // ─────────────────────────────────────────────────────────────────────
         // CLOUDINESS EFFECTS
         // ─────────────────────────────────────────────────────────────────────
         const cloudModifiers = this.computeCloudModifiers(weatherData.cloudiness);
-        Object.assign(modifier, this.addModifiers(modifier, cloudModifiers));
+        Object.assign(modifier, (0, normalization_1.addModifiers)(modifier, cloudModifiers));
         // ─────────────────────────────────────────────────────────────────────
         // TIME OF DAY EFFECTS
         // ─────────────────────────────────────────────────────────────────────
-        const timeModifiers = this.computeTimeOfDayModifiers(weatherData.timeOfDay);
-        Object.assign(modifier, this.addModifiers(modifier, timeModifiers));
+        const timeModifiers = this.computeTimeOfDayModifiers(timeOfDay);
+        Object.assign(modifier, (0, normalization_1.addModifiers)(modifier, timeModifiers));
         // ─────────────────────────────────────────────────────────────────────
         // SEASONAL EFFECTS
         // ─────────────────────────────────────────────────────────────────────
-        const seasonModifiers = this.computeSeasonalModifiers(weatherData.season);
-        Object.assign(modifier, this.addModifiers(modifier, seasonModifiers));
+        const seasonModifiers = this.computeSeasonalModifiers(season);
+        Object.assign(modifier, (0, normalization_1.addModifiers)(modifier, seasonModifiers));
         // ─────────────────────────────────────────────────────────────────────
         // COMPOUND INTERACTIONS
         // ─────────────────────────────────────────────────────────────────────
         // Some effects compound (e.g., cold + rainy is more introspective than either alone)
-        const compoundModifiers = this.computeCompoundInteractions(weatherData);
-        Object.assign(modifier, this.addModifiers(modifier, compoundModifiers));
-        // ─────────────────────────────────────────────────────────────────────
-        // NORMALIZE & CLAMP
-        // ─────────────────────────────────────────────────────────────────────
-        this.normalizeModifier(modifier);
+        const compoundModifiers = this.computeCompoundInteractions({
+            temperature: weatherData.temperature,
+            precipitationIntensity,
+            cloudiness: weatherData.cloudiness,
+            timeOfDay,
+            season
+        });
+        Object.assign(modifier, (0, normalization_1.addModifiers)(modifier, compoundModifiers));
+        // Normalize to valid range (uses shared implementation)
+        const normalized = (0, normalization_1.normalizeModifier)(modifier);
+        // Copy normalized values back
+        Object.assign(modifier, normalized);
         // Compute overall confidence
-        modifier.confidence = this.computeContextConfidence(weatherData);
-        return modifier;
+        modifier.confidence = this.computeContextConfidence({
+            temperature: weatherData.temperature,
+            precipitationIntensity,
+            cloudiness: weatherData.cloudiness,
+            humidity: weatherData.humidity,
+            visibility: weatherData.visibility
+        });
+        // Return modifiers + computed context for consumer
+        return {
+            ...modifier,
+            timeOfDay,
+            season
+        };
     }
     /**
      * Temperature modifiers

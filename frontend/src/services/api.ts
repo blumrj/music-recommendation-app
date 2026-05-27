@@ -1,12 +1,9 @@
 import type { AxiosInstance } from "axios";
 import axios from "axios";
+import type { User, EmotionalDimension, SurveyedAlbumsResponse, UserProfileResponse } from "../types";
 
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  spotifyId: string;
-}
+// Re-export types for convenience
+export type { User, EmotionalDimension, SurveyedAlbumsResponse, UserProfileResponse } from "../types";
 
 class ApiClient {
   private client: AxiosInstance;
@@ -116,67 +113,32 @@ class ApiClient {
     return response.data;
   }
 
-  // ===== FAVORITES =====
-
-  // Get user's favorite albums
-  async getFavorites(): Promise<Record<string, unknown>[]> {
-    const response = await this.client.get(`/albums/favorites/all`);
-    return response.data;
-  }
-
-  // Save album to favorites
-  async saveFavorite(data: {
-    albumSpotifyId: string;
-    albumName: string;
-    artist: string;
-    imageUrl: string;
-    spotifyUrl: string;
-  }): Promise<Record<string, unknown>> {
-    const response = await this.client.post(`/albums/favorites/save`, data);
-    return response.data;
-  }
-
-  // Remove album from favorites
-  async removeFavorite(spotifyId: string): Promise<void> {
-    await this.client.delete(`/albums/favorites/${spotifyId}`);
-  }
-
   // ===== USER PROFILE & TASTE =====
 
   // Get user's profile with onboarding status
-  // Returns: { id, email, profileGenerated, surveyCount, needsOnboarding, readyForAnalysis }
-  async getUserProfile(): Promise<Record<string, unknown>> {
+  async getUserProfile(): Promise<UserProfileResponse> {
     const response = await this.client.get(`/users/profile`);
     return response.data;
   }
 
   // Get available albums for survey (saved albums minus already-surveyed ones)
-  // Returns: { albums: [...], totalCount, message }
-  async getAvailableAlbumsForSurvey(): Promise<Record<string, unknown>> {
+  async getAvailableAlbumsForSurvey(): Promise<SurveyedAlbumsResponse> {
     const response = await this.client.get(`/users/albums-for-survey`);
     return response.data;
   }
 
   // Get user's surveyed albums
-  // Returns: { albums: [...], totalCount }
-  async getSurveyedAlbums(): Promise<Record<string, unknown>> {
+  async getSurveyedAlbums(): Promise<SurveyedAlbumsResponse> {
     const response = await this.client.get(`/users/surveyed-albums`);
     return response.data;
   }
 
-  // Save album survey response
+  // Save album survey response with emotional dimension ratings
   async saveSurvey(spotifyAlbumId: string, data: {
     albumName: string;
     artist: string;
     imageUrl: string;
-    // Old format (backward compatible)
-    seasons?: string[];
-    emotions?: string[];
-    whenYouListen?: string[];
-    movementPreference?: string;
-    vibe?: string[];
-    optionalNote?: string;
-    // Phase 1: New 7D slider responses (0-100 scale)
+    // 7D emotional dimension responses (0-100 scale)
     valence_response?: number;          // 0=Sad, 100=Happy
     arousal_response?: number;          // 0=Calm, 100=Energized
     tension_response?: number;          // 0=Relaxed, 100=Tense
@@ -192,15 +154,15 @@ class ApiClient {
     return response.data;
   }
 
-  // Get user's taste profile
-  async getTasteProfile(): Promise<Record<string, unknown>> {
-    const response = await this.client.get(`/users/taste-profile`);
-    return response.data;
-  }
-
   // Analyze taste profile from surveys
   async analyzeTaste(): Promise<Record<string, unknown>> {
     const response = await this.client.post(`/users/analyze-taste`);
+    return response.data;
+  }
+
+  // Get emotional dimensions configuration from backend
+  async getEmotionalDimensions(): Promise<EmotionalDimension[]> {
+    const response = await this.client.get(`/config/emotional-dimensions`);
     return response.data;
   }
 }

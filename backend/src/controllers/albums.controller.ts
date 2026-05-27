@@ -13,7 +13,7 @@
  */
 
 import { Request, Response } from "express";
-import { albumService } from "../services/album";
+import { albumService } from "../modules/recommendations";
 import { SaveFavoriteDTO } from "../types/spotify.dto";
 
 /**

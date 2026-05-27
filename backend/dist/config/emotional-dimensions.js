@@ -2,7 +2,7 @@
 /**
  * EMOTIONAL DIMENSIONS CONFIGURATION
  *
- * Defines the 7 core emotional dimensions that form our embedding space.
+ * Defines the core emotional dimensions that form our embedding space.
  * These dimension names are used as semantic anchors for FastText similarity.
  *
  * PRINCIPLE: Only dimension NAMES are defined here.
@@ -17,7 +17,7 @@ exports.getDimensionNames = getDimensionNames;
 exports.getDimensions = getDimensions;
 exports.getDimension = getDimension;
 /**
- * 7-dimensional emotional anchor space
+ * multi-dimensional emotional anchor space
  *
  * Each dimension can be queried for semantic similarity to music tags.
  * Example: similarity(tag="ethereal", dimension="groundedness")
@@ -25,36 +25,57 @@ exports.getDimension = getDimension;
 exports.EMOTIONAL_DIMENSIONS = {
     valence: {
         name: "valence",
-        description: "Sad, melancholic, gloomy (0) vs uplifting, joyful, positive (1)"
+        description: "Sad, melancholic, gloomy (0) vs uplifting, joyful, positive (1)",
+        label: "Positivity",
+        leftLabel: "Sad",
+        rightLabel: "Happy"
     },
     arousal: {
         name: "arousal",
-        description: "Calm, soothing, relaxing (0) vs energetic, stimulating, exciting (1)"
+        description: "Calm, soothing, relaxing (0) vs energetic, stimulating, exciting (1)",
+        label: "Energy",
+        leftLabel: "Calm",
+        rightLabel: "Energized"
     },
     tension: {
         name: "tension",
-        description: "Relaxed, resolved, consonant (0) vs tense, dissonant, unsettling (1)"
+        description: "Relaxed, resolved, consonant (0) vs tense, dissonant, unsettling (1)",
+        label: "Tension",
+        leftLabel: "Relaxed",
+        rightLabel: "Tense"
     },
     warmth: {
         name: "warmth",
-        description: "Cold, distant, harsh (0) vs warm, intimate, cozy (1)"
+        description: "Cold, distant, harsh (0) vs warm, intimate, cozy (1)",
+        label: "Warmth",
+        leftLabel: "Cold",
+        rightLabel: "Warm"
     },
     intimacy: {
         name: "intimacy",
-        description: "Distant, external, public (0) vs personal, introspective, vulnerable (1)"
+        description: "Distant, external, public (0) vs personal, introspective, vulnerable (1)",
+        label: "Intimacy",
+        leftLabel: "Distant",
+        rightLabel: "Personal"
     },
     density: {
         name: "density",
-        description: "Minimal, sparse, simple (0) vs layered, rich, complex (1)"
+        description: "Minimal, sparse, simple (0) vs layered, rich, complex (1)",
+        label: "Density",
+        leftLabel: "Sparse",
+        rightLabel: "Rich"
     },
     groundedness: {
         name: "groundedness",
-        description: "Dreamy, ethereal, escapist (0) vs grounded, earthy, rooted (1)"
+        description: "Dreamy, ethereal, escapist (0) vs grounded, earthy, rooted (1)",
+        label: "Groundedness",
+        leftLabel: "Dreamy",
+        rightLabel: "Grounded"
     }
 };
 /**
  * Get all dimension names for semantic embeddings
- * @returns Array of 7 dimension names
+ * @returns Array of dimensions names
  */
 function getDimensionNames() {
     return Object.keys(exports.EMOTIONAL_DIMENSIONS);

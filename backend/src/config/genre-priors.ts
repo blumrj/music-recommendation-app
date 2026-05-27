@@ -17,8 +17,6 @@
  * @category Configuration
  */
 
-import { EmotionalVector } from "../types/embedding.dto";
-
 export interface GenrePrior {
   // Soft emotional deviations (applied as: 0.5 + deviation)
   valence?: number;           // uplifting ↔ sad

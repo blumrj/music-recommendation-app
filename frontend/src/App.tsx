@@ -6,7 +6,7 @@ import {
 import Login from "./pages/Login";
 import Callback from "./pages/Callback";
 import Home from "./pages/Home";
-import Favorites from "./pages/Favorites";
+import Onboarding from "./pages/Onboarding";
 import Profile from "./pages/Profile";
 import Root from "./pages/Root";
 import { AuthProvider } from "./context/AuthContext";
@@ -25,8 +25,8 @@ const router = createBrowserRouter([
         loader: protectedLoader,
       },
       {
-        path: "/favorites",
-        Component: Favorites,
+        path: "/onboarding",
+        Component: Onboarding,
         loader: protectedLoader,
       },
       {

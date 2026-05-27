@@ -33,7 +33,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { lastfmClient } from "../src/utils/lastfm-client";
-import { albumEnrichmentService } from "../src/services/album/album-enrichment.service";
+import { albumEnrichmentService } from "../src/modules/embeddings/album-enrichment.service";
 import dotenv from "dotenv";
 
 // Load environment variables

@@ -5,9 +5,9 @@
  * Computes semantic similarity between Last.fm tags and emotional dimensions.
  *
  * CORE IDEA:
- * - For any Last.fm tag, compute similarity to all 12 emotional dimensions
+ * - For any Last.fm tag, compute similarity to all 7 emotional dimensions
  * - Use FastText embeddings + cosine similarity
- * - Result: tag is positioned in 12D emotional space (soft scores, no thresholds)
+ * - Result: tag is positioned in 7D emotional space (soft scores, no thresholds)
  *
  * ALGORITHM:
  * 1. Embed Last.fm tag word via FastText
@@ -38,7 +38,7 @@ class SemanticSimilarityService {
      * Pre-compute and cache embeddings for all emotional dimension names
      *
      * This is done once at service initialization so we don't re-embed
-     * "warmth", "spaciousness", etc. repeatedly.
+     * "warmth", "intimacy", "density", etc. repeatedly.
      *
      * @private
      */
@@ -51,14 +51,14 @@ class SemanticSimilarityService {
         console.log(`[SEMANTIC] Pre-computed embeddings for ${dimensions.length} dimensions`);
     }
     /**
-     * Compute semantic similarity scores for a tag across all emotional dimensions
+     * Compute semantic similarity scores for a tag across all 7 emotional dimensions
      *
      * ALGORITHM:
-     * 1. Embed the tag word
+     * 1. Embed the tag word via FastText
      * 2. For each dimension:
      *    - Get pre-computed dimension embedding
      *    - Compute cosine similarity
-     * 3. Return all scores (soft weighting, no thresholds)
+     * 3. Return sparse scores (keep only top 1-2 dimensions)
      *
      * RESULT EXAMPLE:
      * Input: "ethereal"

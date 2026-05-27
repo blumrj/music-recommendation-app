@@ -27,6 +27,7 @@ import albumRoutes from "./routes/albums.routes";
 import userRoutes from "./routes/users.routes";
 import recommendationRoutes from "./routes/recommendation.routes";
 import { authRoutes } from "./routes/auth.routes";
+import { configRouter } from "./routes/config.routes";
 
 /**
  * Load environment variables from .env file
@@ -67,11 +68,13 @@ app.use(express.json());
  * - albumRoutes: Favorites, surveys
  * - authRoutes: Spotify OAuth, token management
  * - recommendationRoutes: Weather-based recommendations
+ * - configRouter: Application configuration endpoints
  */
 app.use("/api/users", userRoutes);
 app.use("/api/albums", albumRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api", recommendationRoutes);
+app.use("/api/config", configRouter);
 
 /**
  * Health check endpoint

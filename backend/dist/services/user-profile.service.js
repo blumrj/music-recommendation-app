@@ -67,9 +67,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.userProfileService = void 0;
 const client_1 = require("@prisma/client");
-const album_embedding_service_1 = require("./album-embedding.service");
+const album_embedding_service_1 = require("./album/album-embedding.service");
 const vectorMath = __importStar(require("../utils/vector-math"));
-const auth_service_1 = require("./auth.service");
 const prisma = new client_1.PrismaClient();
 /**
  * User Profile Service - 13D
@@ -79,72 +78,6 @@ const prisma = new client_1.PrismaClient();
  * @class UserProfileService
  */
 class UserProfileService {
-    /**
-     * Ensure Spotify access token is fresh
-     * Refreshes if expired, returns new token and updates database
-     *
-     * @private
-     * @async
-     * @param {string} userId - User ID to refresh token for
-     * @param {string} spotifyAccessToken - Current access token (may be expired)
-     *
-     * @returns {Promise<string>} Fresh Spotify access token
-     */
-    async ensureFreshSpotifyToken(userId, spotifyAccessToken) {
-        try {
-            console.log(`[PROFILE] ensureFreshSpotifyToken called for user ${userId}`);
-            console.log(`[PROFILE] Current token:`, {
-                length: spotifyAccessToken.length,
-                start: spotifyAccessToken.substring(0, 20)
-            });
-            // Get user's refresh token from database
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: { spotifyRefreshToken: true }
-            });
-            console.log(`[PROFILE] User found:`, !!user);
-            console.log(`[PROFILE] Has refresh token:`, !!user?.spotifyRefreshToken);
-            if (!user?.spotifyRefreshToken) {
-                console.warn(`[PROFILE] No refresh token stored for user ${userId}, using current token`);
-                return spotifyAccessToken; // Use what we have
-            }
-            console.log(`[PROFILE] Attempting to refresh token using refresh token:`, {
-                refreshTokenLength: user.spotifyRefreshToken.length,
-                refreshTokenStart: user.spotifyRefreshToken.substring(0, 20)
-            });
-            // Attempt to refresh the access token
-            try {
-                const newTokens = await auth_service_1.authService.refreshAccessToken(user.spotifyRefreshToken);
-                const newAccessToken = newTokens.access_token;
-                console.log(`[PROFILE] ✓ Got new access token:`, {
-                    newTokenLength: newAccessToken.length,
-                    newTokenStart: newAccessToken.substring(0, 20),
-                    expiresIn: newTokens.expires_in
-                });
-                // Update database with fresh token
-                const updated = await prisma.user.update({
-                    where: { id: userId },
-                    data: { spotifyToken: newAccessToken }
-                });
-                console.log(`[PROFILE] ✓ Updated user in database with new token`);
-                return newAccessToken;
-            }
-            catch (refreshError) {
-                console.error(`[PROFILE] Token refresh failed:`, {
-                    message: refreshError.message,
-                    status: refreshError.response?.status,
-                    data: refreshError.response?.data
-                });
-                // Fall back to using current token (might work, might fail)
-                console.log(`[PROFILE] Falling back to current token`);
-                return spotifyAccessToken;
-            }
-        }
-        catch (error) {
-            console.error(`[PROFILE] Error ensuring fresh token: ${error.message}`);
-            return spotifyAccessToken; // Return what we have
-        }
-    }
     /**
      * Compute 13D user profile from surveyed albums + deviations
      *
@@ -269,82 +202,6 @@ class UserProfileService {
         }
     }
     /**
-     * Fetch Spotify audio features for an album
-     *
-     * Uses the batch endpoint /audio-features?ids=... which may have better scope support
-     *
-     * @private
-     * @param {string} spotifyAlbumId - Spotify album ID
-     * @param {Object} spotifyClient - Axios Spotify client instance
-     *
-     * @returns {Promise<Record<string, number>>} Audio features map
-     */
-    async fetchAudioFeaturesForAlbum(spotifyAlbumId, spotifyClient) {
-        try {
-            console.log(`[PROFILE] Fetching album data for: ${spotifyAlbumId}`);
-            // Get album details from Spotify API
-            const albumResponse = await spotifyClient.get(`/albums/${spotifyAlbumId}`);
-            const album = albumResponse.data;
-            // Get first 5 track IDs
-            if (!album.tracks?.items || album.tracks.items.length === 0) {
-                console.warn(`[PROFILE] Album ${spotifyAlbumId} has no tracks`);
-                return this.getDefaultAudioFeatures();
-            }
-            const trackIds = album.tracks.items.slice(0, 5).map((t) => t.id);
-            console.log(`[PROFILE] Fetching batch audio features for ${trackIds.length} tracks`);
-            try {
-                // Use batch endpoint: /audio-features?ids=id1,id2,id3
-                const batchResponse = await spotifyClient.get(`/audio-features`, {
-                    params: { ids: trackIds.join(',') }
-                });
-                const featuresArray = batchResponse.data.audio_features || [];
-                console.log(`[PROFILE] Got batch features response with ${featuresArray.length} items`);
-                // Use first successfully returned track's features (not null)
-                const features = featuresArray.find((f) => f !== null);
-                if (!features) {
-                    console.warn(`[PROFILE] No valid audio features in batch response`);
-                    return this.getDefaultAudioFeatures();
-                }
-                console.log(`[PROFILE] ✓ Got audio features:`, {
-                    valence: features.valence?.toFixed(2),
-                    energy: features.energy?.toFixed(2),
-                    acousticness: features.acousticness?.toFixed(2),
-                    danceability: features.danceability?.toFixed(2)
-                });
-                return {
-                    valence: features.valence ?? 0.5,
-                    energy: features.energy ?? 0.5,
-                    acousticness: features.acousticness ?? 0.5,
-                    danceability: features.danceability ?? 0.5,
-                    instrumentalness: features.instrumentalness ?? 0.5,
-                    loudness: features.loudness ?? -5,
-                    mode: features.mode ?? 1,
-                    tempo: features.tempo ?? 120,
-                    key: features.key ?? 0,
-                    speechiness: features.speechiness ?? 0,
-                    liveness: features.liveness ?? 0
-                };
-            }
-            catch (batchError) {
-                console.error(`[PROFILE] Batch endpoint failed:`, {
-                    message: batchError.message,
-                    status: batchError.response?.status,
-                    statusText: batchError.response?.statusText
-                });
-                return this.getDefaultAudioFeatures();
-            }
-        }
-        catch (error) {
-            console.error(`[PROFILE] ERROR fetching album/track data:`, {
-                albumId: spotifyAlbumId,
-                message: error.message,
-                status: error.response?.status,
-                statusText: error.response?.statusText
-            });
-            return this.getDefaultAudioFeatures();
-        }
-    }
-    /**
      * Save 13D user profile to database
      *
      * @async
@@ -455,37 +312,6 @@ class UserProfileService {
         return saved;
     }
     /**
-     * Get user's 13D profile from database
-     *
-     * @async
-     * @param {string} userId - User ID
-     *
-     * @returns {Promise<Vector13D|null>} 13D profile vector, or null if not found
-     */
-    async get13DProfile(userId) {
-        try {
-            const profile = await prisma.userTasteProfile.findUnique({
-                where: { userId }
-            });
-            if (!profile) {
-                return null;
-            }
-            return {
-                valence: profile.valence ?? 0.5,
-                arousal: profile.arousal ?? 0.5,
-                tension: profile.tension ?? 0.5,
-                warmth: profile.warmth ?? 0.5,
-                intimacy: profile.intimacy ?? 0.5,
-                density: profile.density ?? 0.5,
-                groundedness: profile.groundedness ?? 0.5
-            };
-        }
-        catch (error) {
-            console.warn(`[PROFILE] Failed to fetch profile: ${error.message}`);
-            return null;
-        }
-    }
-    /**
      * Convert 6 survey slider responses to 13D emotional vector
      *
      * MAPPING STRATEGY:
@@ -543,27 +369,6 @@ class UserProfileService {
             intimacy: 1.0 - normalize(survey.intimacy_response), // INVERT: 0=intimate, 100=distant → 1=intimate, 0=distant
             density: normalize(survey.density_response),
             groundedness: normalize(survey.groundedness_response)
-        };
-    }
-    /**
-     * Get default audio features (fallback for unknown albums)
-     *
-     * @private
-     * @returns {Record<string, number>} Neutral audio features
-     */
-    getDefaultAudioFeatures() {
-        return {
-            danceability: 0.5,
-            energy: 0.5,
-            loudness: -5,
-            speechiness: 0,
-            acousticness: 0.5,
-            instrumentalness: 0,
-            liveness: 0,
-            valence: 0.5,
-            tempo: 120,
-            mode: 1,
-            key: 0
         };
     }
 }

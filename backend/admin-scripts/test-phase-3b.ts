@@ -12,9 +12,9 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import { userProfileService } from "../src/services/user-profile.service";
-import { surveyService } from "../src/services/survey.service";
-import { albumEmbeddingService } from "../src/services/album-embedding.service";
+import { userProfileService } from "../src/modules/users/user-profile.service";
+import { surveyService } from "../src/modules/surveys/survey.service";
+import { albumEmbeddingService } from "../src/modules/embeddings/album-embedding.orchestrator";
 import * as vectorMath from "../src/utils/vector-math";
 
 const prisma = new PrismaClient();

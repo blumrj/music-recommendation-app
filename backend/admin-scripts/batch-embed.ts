@@ -28,7 +28,7 @@
  * @module admin-scripts/batch-embed
  */
 
-import { batchEmbeddingService } from "../src/services/batch-embedding.service";
+import { batchEmbeddingService } from "../src/admin/batch-embedding.service";
 import dotenv from "dotenv";
 
 // Load environment variables

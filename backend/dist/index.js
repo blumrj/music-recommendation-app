@@ -8,7 +8,6 @@
  * Routes:
  * - /api/users - User profile and taste analysis endpoints
  * - /api/albums - Album favorites and survey endpoints
- * - /api/weather - Weather mood detection by coordinates
  * - /api/auth - Spotify OAuth and token management
  * - /api/recommendations - Weather-based music recommendations
  *
@@ -30,9 +29,9 @@ const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const albums_routes_1 = __importDefault(require("./routes/albums.routes"));
 const users_routes_1 = __importDefault(require("./routes/users.routes"));
-const weather_routes_1 = __importDefault(require("./routes/weather.routes"));
 const recommendation_routes_1 = __importDefault(require("./routes/recommendation.routes"));
 const auth_routes_1 = require("./routes/auth.routes");
+const config_routes_1 = require("./routes/config.routes");
 /**
  * Load environment variables from .env file
  * Required variables: PORT, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, etc.
@@ -66,15 +65,15 @@ app.use(express_1.default.json());
  * Route modules:
  * - userRoutes: Profile, taste analysis
  * - albumRoutes: Favorites, surveys
- * - weatherRoutes: Weather mood detection
  * - authRoutes: Spotify OAuth, token management
  * - recommendationRoutes: Weather-based recommendations
+ * - configRouter: Application configuration endpoints
  */
 app.use("/api/users", users_routes_1.default);
 app.use("/api/albums", albums_routes_1.default);
-app.use("/api/weather", weather_routes_1.default);
 app.use("/api/auth", auth_routes_1.authRoutes);
 app.use("/api", recommendation_routes_1.default);
+app.use("/api/config", config_routes_1.configRouter);
 /**
  * Health check endpoint
  * GET /api/health

@@ -1,47 +1,39 @@
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Box, Typography } from "@mui/material";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Footer from "../components/Footer";
-import MenuBar from "../components/MenuBar";
-import FolderTree from "../components/FolderTree";
-import XPWindow from "../components/XPWindow";
+import Header from "../components/Header";
+import Sidebar from "../components/Sidebar";
+import Modal from "../components/Modal";
+import { getSidebarState, setSidebarState } from "../utils/sidebarStorage";
 
 const Root = () => {
   const { user, logoutUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [showDoraInfo, setShowDoraInfo] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => getSidebarState());
 
   const handleLogout = () => {
     logoutUser();
     navigate("/login");
   };
 
-  // Show sidebar on home, favorites, and profile pages
-  const showSidebar = location.pathname === "/" || 
-                      location.pathname === "/favorites" ||
-                      location.pathname === "/profile";
-
-  // Determine which folder is selected based on current path
-  const getSelectedFolder = () => {
-    if (location.pathname === "/favorites") return "favorites";
-    if (location.pathname === "/profile") return "profile";
-    return "todays-picks";
+  const toggleSidebar = () => {
+    const newState = !sidebarOpen;
+    setSidebarOpen(newState);
+    setSidebarState(newState);
   };
 
+  // Show sidebar on all pages except login/callback
+  const showSidebar = location.pathname !== "/login" && location.pathname !== "/callback";
+
+
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'var(--color-vinyl-tan)',
-      }}
-    >
+    <div className="min-h-screen flex flex-col bg-secondary">
       {/* Menu Bar + Header */}
-      <MenuBar
+      <Header
         isLoggedIn={!!user}
         onLogout={handleLogout}
         onAboutDora={() => setShowDoraInfo(true)}
@@ -49,75 +41,61 @@ const Root = () => {
 
       {/* About DORA Modal */}
       {showDoraInfo && (
-        <XPWindow
+        <Modal
           title="How DORA Works"
           onClose={() => setShowDoraInfo(false)}
-          onFocus={() => {}}
+          overlay={true}
+          closeOnBackdropClick={true}
+          zIndex={9999}
         >
-          <Box sx={{ p: 2,  fontSize: "12px", textAlign: "center" }}>
-            <Typography
-              sx={{
-                fontSize: "11px",
-                lineHeight: 1.6,
-                color: "#555",
-                mb: 1,
-              }}
-            >
-              DORA helps you discover music that feels right for you. By reflecting on albums you love, you start to understand what draws you in—the moods, the sounds, the feelings. It's about learning yourself through music.
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: "11px",
-                lineHeight: 1.6,
-                color: "#555",
-                mb: 1,
-              }}
-            >
-              As you tell DORA about your favorite albums—what makes them special, when you listen to them, how they make you feel—a picture of your taste emerges naturally. What are your constant themes? What contexts bring out different sides of you?
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: "11px",
-                lineHeight: 1.6,
-                color: "#555",
-              }}
-            >
-              When you're ready for recommendations, DORA considers who you are musically and what's happening around you—the weather, the time of day, your mood. It's less about being served suggestions and more about finding music that resonates with where you're at in that moment.
-            </Typography>
-          </Box>
-        </XPWindow>
+          <div className="p-md text-md text-center">
+            <p className="text-xs leading-relaxed mb-2">
+              DORA helps you discover music that feels right for you. By
+              reflecting on albums you love, you start to understand what draws
+              you in—the moods, the sounds, the feelings. It's about learning
+              yourself through music.
+            </p>
+            <p className="text-xs leading-relaxed mb-2">
+              As you tell DORA about your favorite albums—what makes them
+              special, when you listen to them, how they make you feel—a picture
+              of your taste emerges naturally. What are your constant themes?
+              What contexts bring out different sides of you?
+            </p>
+            <p className="text-xs leading-relaxed">
+              When you're ready for recommendations, DORA considers who you are
+              musically and what's happening around you—the weather, the time of
+              day, your mood. It's less about being served suggestions and more
+              about finding music that resonates with where you're at in that
+              moment.
+            </p>
+          </div>
+        </Modal>
       )}
 
       {/* Page Content */}
-      <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="flex-1 flex overflow-hidden">
         {/* Sidebar - only visible on home pages */}
         {showSidebar && (
-          <Box
-            sx={{
-              width: '220px',
-              background: '#c0c0c0',
-              borderRight: '2px solid',
-              borderColor: '#dfdfdf #808080 #808080 #dfdfdf',
-              overflow: 'auto',
-              boxShadow: 'inset -1px -1px 0 rgba(255,255,255,0.5), inset 1px 1px 0 rgba(0,0,0,0.3)',
+          <div
+            className={`overflow-auto bg-primary ${sidebarOpen ? 'w-55' : 'w-12.5'}`}
+            style={{
+              borderRight: "2px solid",
+              borderColor: "rgb(223, 223, 223) rgb(128, 128, 128) rgb(128, 128, 128) rgb(223, 223, 223)",
             }}
           >
-            <FolderTree
-              onFolderSelect={() => {}}
-              selectedFolder={getSelectedFolder()}
-            />
-          </Box>
+            <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
+          </div>
         )}
-        
+
         {/* Main Content */}
-        <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+        <div className="flex-1">
           <Outlet />
-        </Box>
-      </Box>
+        </div>
+      </div>
 
       {/* Footer */}
-      <Footer status="Built with PATIENCE :)" />
-    </Box>
+      <Footer />
+    </div>
   );
 };
 

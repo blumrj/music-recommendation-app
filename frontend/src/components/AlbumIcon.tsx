@@ -1,105 +1,63 @@
-import { Box, Typography } from "@mui/material";
+import { useState } from "react";
+import { getAlbumImage } from "../utils/getAlbumImage";
 
 interface AlbumIconProps {
   name: string;
   artist: string;
   image: string;
-  isSelected?: boolean;
   onClick?: () => void;
-  onDoubleClick?: () => void;
 }
 
 const AlbumIcon = ({
   name,
   artist,
   image,
-  isSelected = false,
   onClick,
-  onDoubleClick,
 }: AlbumIconProps) => {
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  const finalImage = getAlbumImage(image);
+  const isUsingFallback = imageLoadFailed || finalImage === "/win98-icons/cd_audio_cd-0.png";
+
   return (
-    <Box
+    <div
       onClick={onClick}
-      onDoubleClick={onDoubleClick}
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '4px',
-        padding: '8px',
-        cursor: 'pointer',
-        userSelect: 'none',
-        background: isSelected ? 'rgba(10, 36, 106, 0.3)' : 'transparent',
-        borderRadius: '4px',
-        border: isSelected ? '1px dashed #0a246a' : '1px dashed transparent',
-        transition: 'all 0.2s ease',
-        minWidth: '80px',
-        '&:hover': {
-          background: isSelected ? 'rgba(10, 36, 106, 0.4)' : 'rgba(0, 0, 0, 0.05)',
-          transform: 'scale(1.05)',
-        },
-      }}
+      className="flex flex-col items-center gap-1 p-2 cursor-pointer select-none min-w-20 transition-all duration-200 hover:scale-105"
     >
-      {/* CD Icon with Album Art */}
-      <Box
-        sx={{
-          width: '64px',
-          height: '64px',
-          borderRadius: '4px',
-          backgroundImage: `url('${image}')`,
+      {/* Album Art */}
+      <div
+        className="w-16 h-16 border-2 border-accent-secondary shadow-md relative overflow-hidden flex items-center justify-center bg-gray-200"
+        style={{
+          backgroundImage: !isUsingFallback ? `url('${finalImage}')` : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          border: '2px solid #888',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3)',
-          position: 'relative',
-          overflow: 'hidden',
         }}
+        onError={() => setImageLoadFailed(true)}
       >
-        {/* CD shine effect */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%, rgba(0,0,0,0.1) 100%)',
-            pointerEvents: 'none',
-          }}
-        />
-      </Box>
+        {isUsingFallback && (
+          <img
+            src="/win98-icons/cd_audio_cd-0.png"
+            alt="Default album cover"
+            className="w-10 h-10 opacity-70"
+            onError={() => {}} // Fallback for fallback - silent fail
+          />
+        )}
+      </div>
 
       {/* Album Info */}
-      <Box sx={{ textAlign: 'center', width: '100%' }}>
-        <Typography
-          sx={{
-            fontSize: '11px',
-            fontWeight: 600,
-            color: '#000',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: '80px',
-          }}
+      <div className="text-center w-full">
+        <p className="text-xs font-semibold text-text-primary truncate max-w-20"
           title={name}
         >
           {name}
-        </Typography>
-        <Typography
-          sx={{
-            fontSize: '10px',
-            color: '#555',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: '80px',
-          }}
+        </p>
+        <p
+          className="text-[10px] text-text-secondary truncate max-w-20"
           title={artist}
         >
           {artist}
-        </Typography>
-      </Box>
-    </Box>
+        </p>
+      </div>
+    </div>
   );
 };
 

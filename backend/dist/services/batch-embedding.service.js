@@ -33,7 +33,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.batchEmbeddingService = void 0;
 const client_1 = require("@prisma/client");
-const album_embedding_service_1 = require("./album-embedding.service");
+const album_embedding_service_1 = require("./album/album-embedding.service");
 const prisma = new client_1.PrismaClient();
 /**
  * Batch Embedding Service
