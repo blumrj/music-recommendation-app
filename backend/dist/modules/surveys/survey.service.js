@@ -81,90 +81,93 @@ class SurveyService {
      */
     async saveSurveyResponse(params) {
         try {
-            // Build update object dynamically to handle optional fields
-            const updateData = {
-                seasons: params.seasons || [],
-                emotions: params.emotions || [],
-                whenYouListen: params.whenYouListen || [],
-                vibe: params.vibe || [],
-                optionalNote: params.optionalNote,
-                updatedAt: new Date()
-            };
-            // Add optional fields only if defined
-            if (params.movementPreference !== undefined) {
-                updateData.movementPreference = params.movementPreference;
+            // Log incoming params for debugging
+            console.log(`[SURVEY] Saving survey response for album: "${params.albumName}"`);
+            console.log(`[SURVEY]   - Spotify ID: ${params.spotifyAlbumId}`);
+            console.log(`[SURVEY]   - Artist: ${params.artist}`);
+            console.log(`[SURVEY]   - ImageUrl: ${params.imageUrl ? `✓ (${params.imageUrl.substring(0, 50)}...)` : "❌ EMPTY"}`);
+            // Step 1: Create or update Album, ALWAYS ensuring title, artist, and imageUrl are current
+            let album = await prisma.album.findUnique({
+                where: { spotifyId: params.spotifyAlbumId }
+            });
+            if (!album) {
+                console.log(`[SURVEY]   - Creating new album record`);
+                album = await prisma.album.create({
+                    data: {
+                        spotifyId: params.spotifyAlbumId,
+                        title: params.albumName,
+                        artist: params.artist,
+                        imageUrl: params.imageUrl || ""
+                    }
+                });
+                console.log(`[SURVEY]   ✓ Album created with imageUrl: ${params.imageUrl ? 'YES' : 'EMPTY'}`);
             }
-            if (params.valence_response !== undefined) {
-                updateData.valence_response = params.valence_response;
+            else {
+                // Always update existing album to ensure title, artist, imageUrl are current
+                console.log(`[SURVEY]   - Album exists, updating with latest data (imageUrl: ${params.imageUrl ? 'PROVIDED' : 'NONE'})`);
+                album = await prisma.album.update({
+                    where: { spotifyId: params.spotifyAlbumId },
+                    data: {
+                        title: params.albumName,
+                        artist: params.artist,
+                        imageUrl: params.imageUrl || album.imageUrl || "" // Keep existing imageUrl if no new one provided
+                    }
+                });
+                console.log(`[SURVEY]   ✓ Album updated. Final imageUrl: ${album.imageUrl ? 'YES' : 'EMPTY'}`);
             }
-            if (params.arousal_response !== undefined) {
-                updateData.arousal_response = params.arousal_response;
-            }
-            if (params.tension_response !== undefined) {
-                updateData.tension_response = params.tension_response;
-            }
-            if (params.warmth_response !== undefined) {
-                updateData.warmth_response = params.warmth_response;
-            }
-            if (params.intimacy_response !== undefined) {
-                updateData.intimacy_response = params.intimacy_response;
-            }
-            if (params.density_response !== undefined) {
-                updateData.density_response = params.density_response;
-            }
-            if (params.groundedness_response !== undefined) {
-                updateData.groundedness_response = params.groundedness_response;
-            }
-            // Build create object with all fields
-            const createData = {
-                userId: params.userId,
-                spotifyAlbumId: params.spotifyAlbumId,
-                albumName: params.albumName,
-                artist: params.artist,
-                imageUrl: params.imageUrl,
-                seasons: params.seasons || [],
-                emotions: params.emotions || [],
-                whenYouListen: params.whenYouListen || [],
-                vibe: params.vibe || [],
-                optionalNote: params.optionalNote
-            };
-            // Add optional fields to create if defined
-            if (params.movementPreference !== undefined) {
-                createData.movementPreference = params.movementPreference;
-            }
-            if (params.valence_response !== undefined) {
-                createData.valence_response = params.valence_response;
-            }
-            if (params.arousal_response !== undefined) {
-                createData.arousal_response = params.arousal_response;
-            }
-            if (params.tension_response !== undefined) {
-                createData.tension_response = params.tension_response;
-            }
-            if (params.warmth_response !== undefined) {
-                createData.warmth_response = params.warmth_response;
-            }
-            if (params.intimacy_response !== undefined) {
-                createData.intimacy_response = params.intimacy_response;
-            }
-            if (params.density_response !== undefined) {
-                createData.density_response = params.density_response;
-            }
-            if (params.groundedness_response !== undefined) {
-                createData.groundedness_response = params.groundedness_response;
-            }
-            // Upsert prevents duplicate surveys for same user+album
+            // Step 2: Create or update AlbumSurvey (marks survey as completed for this album)
             const survey = await prisma.albumSurvey.upsert({
                 where: {
-                    userId_spotifyAlbumId: {
+                    userId_albumId: {
                         userId: params.userId,
-                        spotifyAlbumId: params.spotifyAlbumId
+                        albumId: album.id
                     }
                 },
-                update: updateData,
-                create: createData
+                update: {
+                    updatedAt: new Date()
+                },
+                create: {
+                    userId: params.userId,
+                    albumId: album.id
+                }
             });
-            console.log(`[SURVEY] Phase 1 survey saved for album ${params.spotifyAlbumId}:`, {
+            // Step 3: Get all dimensions from database
+            const dimensions = await prisma.dimension.findMany();
+            // Create a map of dimension names to IDs
+            const dimensionMap = new Map(dimensions.map(d => [d.name, d.id]));
+            // Step 4: Save each dimension response to UserAlbumPerceptionDimension
+            const dimensionResponses = [
+                { name: 'valence', value: params.valence_response },
+                { name: 'arousal', value: params.arousal_response },
+                { name: 'tension', value: params.tension_response },
+                { name: 'warmth', value: params.warmth_response },
+                { name: 'intimacy', value: params.intimacy_response },
+                { name: 'density', value: params.density_response },
+                { name: 'groundedness', value: params.groundedness_response }
+            ];
+            for (const { name, value } of dimensionResponses) {
+                if (value !== undefined && dimensionMap.has(name)) {
+                    await prisma.userAlbumPerceptionDimension.upsert({
+                        where: {
+                            userId_albumId_dimensionId: {
+                                userId: params.userId,
+                                albumId: album.id,
+                                dimensionId: dimensionMap.get(name)
+                            }
+                        },
+                        update: {
+                            value: Math.round(value) // Ensure 0-100 integer
+                        },
+                        create: {
+                            userId: params.userId,
+                            albumId: album.id,
+                            dimensionId: dimensionMap.get(name),
+                            value: Math.round(value)
+                        }
+                    });
+                }
+            }
+            console.log(`[SURVEY] Survey saved for album ${params.spotifyAlbumId}:`, {
                 sliders: {
                     valence: params.valence_response,
                     arousal: params.arousal_response,
@@ -274,15 +277,26 @@ class SurveyService {
                 where: { userId }, // Filter by user
                 orderBy: { createdAt: "desc" }, // Most recent first
                 take: limit, // Limit to requested number
+                include: {
+                    album: true // Join with Album to get title, artist, etc.
+                }
             });
             // STAGE 2: Transform survey records to FormattedAlbumDTO
-            return surveys.map((survey) => ({
-                spotifyId: survey.spotifyAlbumId, // Spotify album ID from survey
-                name: survey.albumName, // Album name saved in survey
-                artist: survey.artist, // Artist name saved in survey
-                imageUrl: survey.imageUrl, // Album cover saved in survey
-                spotifyUrl: `https://open.spotify.com/album/${survey.spotifyAlbumId}`, // Construct Spotify link
+            const result = surveys.map((survey) => ({
+                spotifyId: survey.album.spotifyId,
+                name: survey.album.title,
+                artist: survey.album.artist,
+                imageUrl: survey.album.imageUrl || "", // Default to empty string if null
+                spotifyUrl: survey.album.spotifyUrl || `https://open.spotify.com/album/${survey.album.spotifyId}`,
             }));
+            // Log for debugging image URLs
+            if (result.length > 0) {
+                console.log(`[SURVEY] Retrieved ${result.length} surveyed albums for user ${userId}`);
+                result.slice(0, 2).forEach((album, i) => {
+                    console.log(`[SURVEY]   Album ${i + 1}: "${album.name}" - imageUrl: ${album.imageUrl ? `✓ (${album.imageUrl.substring(0, 50)}...)` : "❌ EMPTY"}`);
+                });
+            }
+            return result;
         }
         catch (error) {
             console.error("Error fetching surveyed albums:", error);
@@ -407,3 +421,4 @@ class SurveyService {
  * @type {SurveyService}
  */
 exports.surveyService = new SurveyService();
+//# sourceMappingURL=survey.service.js.map

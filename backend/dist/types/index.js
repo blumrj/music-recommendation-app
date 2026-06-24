@@ -7,3 +7,4 @@
 // - backend/src/types/weather.dto.ts
 //
 // This file is kept for future shared types if needed.
+//# sourceMappingURL=index.js.map

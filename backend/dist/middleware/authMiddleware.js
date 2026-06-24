@@ -29,6 +29,8 @@ const auth_service_1 = require("../modules/auth/auth.service");
  * Validates JWT token from Authorization header and attaches userId to request object.
  * Must be applied before route handlers that require authentication.
  *
+ * For routes that also need Spotify access, chain spotifyRefreshMiddleware after this.
+ *
  * @middleware
  * @param {Request} req - Express request object
  * @param {Response} res - Express response object
@@ -44,7 +46,7 @@ const auth_service_1 = require("../modules/auth/auth.service");
  * 2. Validate token signature and expiration using authService
  * 3. Extract userId from token payload
  * 4. Attach userId to request object (accessible as (req as any).userId)
- * 5. Continue to route handler if valid, reject if invalid
+ * 5. Continue to next middleware/route handler if valid, reject if invalid
  *
  * @returns {void} Calls next() if token valid, sends 401 response if invalid
  *
@@ -52,25 +54,14 @@ const auth_service_1 = require("../modules/auth/auth.service");
  * @throws {401} Invalid or expired token
  *
  * @example
- * // Apply to a protected route:
+ * // Simple JWT validation only:
  * router.get('/api/profile', authMiddleware, getUserProfile);
+ *
+ * // With Spotify token refresh:
+ * router.get('/api/recommendations', authMiddleware, spotifyRefreshMiddleware, getRecommendations);
  *
  * // Use in route handler:
  * const userId = (req as any).userId;
- *
- * @example
- * // Valid request:
- * GET /api/profile
- * Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
- *
- * // Invalid request (no header):
- * GET /api/profile
- * Response: 401 Unauthorized - "No auth token provided"
- *
- * // Invalid request (expired token):
- * GET /api/profile
- * Authorization: Bearer <expired_token>
- * Response: 401 Unauthorized - "Invalid or expired token"
  */
 const authMiddleware = (req, res, next) => {
     try {
@@ -98,3 +89,4 @@ const authMiddleware = (req, res, next) => {
     }
 };
 exports.authMiddleware = authMiddleware;
+//# sourceMappingURL=authMiddleware.js.map

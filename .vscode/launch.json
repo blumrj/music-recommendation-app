@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend Debug",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/dist/index.js",
+      "restart": true,
+      "runtimeArgs": ["--nolazy"],
+      "outFiles": ["${workspaceFolder}/backend/dist/**/*.js"],
+      "preLaunchTask": "build-backend",
+      "cwd": "${workspaceFolder}/backend"
+    }
+  ]
+}

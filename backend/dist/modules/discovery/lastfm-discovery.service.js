@@ -240,3 +240,4 @@ class LastfmDiscoveryService {
     }
 }
 exports.lastfmDiscoveryService = new LastfmDiscoveryService();
+//# sourceMappingURL=lastfm-discovery.service.js.map

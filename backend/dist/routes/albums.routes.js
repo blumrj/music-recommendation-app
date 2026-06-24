@@ -14,7 +14,6 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const albums_controller_1 = require("../controllers/albums.controller");
 const survey_controller_1 = require("../controllers/survey.controller");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 /**
@@ -22,81 +21,6 @@ const authMiddleware_1 = require("../middleware/authMiddleware");
  * @type {Router}
  */
 const router = (0, express_1.Router)();
-/**
- * ===== FAVORITES ENDPOINTS =====
- *
- * Manage user's favorite albums collection
- */
-/**
- * GET /api/albums/favorites/all
- * Retrieve all albums that user has marked as favorites
- *
- * @route GET /api/albums/favorites/all
- * @access Private - Requires valid JWT token
- * @middleware authMiddleware - Validates JWT and extracts userId
- *
- * @returns {Array<Object>} Array of favorite album objects
- * @returns {string} returns[].id - Favorite record ID
- * @returns {string} returns[].albumSpotifyId - Spotify album ID
- * @returns {string} returns[].albumName - Album title
- * @returns {string} returns[].artist - Artist name
- * @returns {string} returns[].imageUrl - Album cover image URL
- * @returns {string} returns[].spotifyUrl - Direct link to Spotify
- * @returns {string} returns[].createdAt - When album was favorited
- */
-router.get("/favorites/all", authMiddleware_1.authMiddleware, (req, res) => albums_controller_1.albumController.getFavorites(req, res));
-/**
- * POST /api/albums/favorites/save
- * Add an album to user's favorites list
- *
- * Creates a new favorite if it doesn't exist, does nothing if already favorited.
- *
- * @route POST /api/albums/favorites/save
- * @access Private - Requires valid JWT token
- * @middleware authMiddleware - Validates JWT and extracts userId
- *
- * @param {Object} req.body - Request body (SaveFavoriteDTO)
- * @param {string} req.body.albumSpotifyId - Spotify album ID (required)
- * @param {string} req.body.albumName - Album title (required)
- * @param {string} req.body.artist - Artist name (required)
- * @param {string} req.body.imageUrl - Album cover image URL (optional)
- * @param {string} req.body.spotifyUrl - Spotify album link (required)
- *
- * @returns {Object} Created favorite object
- * @returns {string} returns.id - Favorite record ID
- * @returns {string} returns.createdAt - Timestamp
- *
- * @example
- * POST /api/albums/favorites/save
- * Authorization: Bearer <jwt_token>
- * Content-Type: application/json
- *
- * {
- *   "albumSpotifyId": "spotify_album_id",
- *   "albumName": "Album Title",
- *   "artist": "Artist Name",
- *   "imageUrl": "https://...",
- *   "spotifyUrl": "https://open.spotify.com/album/..."
- * }
- */
-router.post("/favorites/save", authMiddleware_1.authMiddleware, (req, res) => albums_controller_1.albumController.saveFavorite(req, res));
-/**
- * DELETE /api/albums/favorites/:spotifyId
- * Remove an album from user's favorites
- *
- * @route DELETE /api/albums/favorites/:spotifyId
- * @access Private - Requires valid JWT token
- * @middleware authMiddleware - Validates JWT and extracts userId
- *
- * @param {string} spotifyId - Spotify album ID to remove (URL parameter)
- *
- * @returns {Object} Success message
- *
- * @example
- * DELETE /api/albums/favorites/spotify_album_id_123
- * Authorization: Bearer <jwt_token>
- */
-router.delete("/favorites/:spotifyId", authMiddleware_1.authMiddleware, (req, res) => albums_controller_1.albumController.removeFavorite(req, res));
 /**
  * ===== SURVEY ENDPOINTS =====
  *
@@ -154,3 +78,4 @@ router.post("/:spotifyId/survey", authMiddleware_1.authMiddleware, (req, res) =>
  * @exports router - Express router with album-related endpoints
  */
 exports.default = router;
+//# sourceMappingURL=albums.routes.js.map

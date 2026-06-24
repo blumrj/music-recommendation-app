@@ -20,6 +20,7 @@
 import { Request, Response } from "express";
 import { authService } from "../modules/auth/auth.service";
 import { userService } from "../modules/users/users.service";
+import { logger } from "../shared/logger";
 
 /**
  * Authentication Controller
@@ -51,7 +52,7 @@ export class AuthController {
       // STAGE 2: Redirect user's browser to Spotify
       res.redirect(authUrl);
     } catch (error: any) {
-      console.error("Error generating auth URL:", error);
+      logger.error("AUTH", `Error generating auth URL: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
   }
@@ -109,7 +110,7 @@ export class AuthController {
       res.redirect(frontendCallback);
 
     } catch (error: any) {
-      console.error("Error in auth callback:", error);
+      logger.error("AUTH", `Error in auth callback: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
   }

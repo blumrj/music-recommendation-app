@@ -16,6 +16,7 @@
 import { Router } from "express";
 import { recommendationController } from "../controllers/recommendation.controller";
 import { authMiddleware } from "../middleware/authMiddleware";
+import { spotifyRefreshMiddleware } from "../middleware/spotifyRefreshMiddleware";
 
 /**
  * Express router instance for recommendation routes
@@ -75,6 +76,7 @@ const router = Router();
 router.get(
   "/recommendations",
   authMiddleware,
+  spotifyRefreshMiddleware,
   recommendationController.getRecommendations.bind(recommendationController)
 );
 

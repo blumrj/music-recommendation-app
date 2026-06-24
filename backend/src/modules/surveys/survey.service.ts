@@ -83,100 +83,64 @@ class SurveyService {
    */
   async saveSurveyResponse(params: SaveSurveyDTO) {
     try {
-      // Build update object dynamically to handle optional fields
-      const updateData: any = {
-        seasons: params.seasons || [],
-        emotions: params.emotions || [],
-        whenYouListen: params.whenYouListen || [],
-        vibe: params.vibe || [],
-        optionalNote: params.optionalNote,
-        updatedAt: new Date()
-      };
+      // Log incoming params for debugging
+      console.log(`[SURVEY] Saving survey response for album: "${params.albumName}"`);
+      console.log(`[SURVEY]   - Spotify ID: ${params.spotifyAlbumId}`);
+      console.log(`[SURVEY]   - Artist: ${params.artist}`);
+      console.log(`[SURVEY]   - ImageUrl: ${params.imageUrl ? `✓ (${params.imageUrl.substring(0, 50)}...)` : "❌ EMPTY"}`);
 
-      // Add optional fields only if defined
-      if (params.movementPreference !== undefined) {
-        updateData.movementPreference = params.movementPreference;
-      }
-      if (params.valence_response !== undefined) {
-        updateData.valence_response = params.valence_response;
-      }
-      if (params.arousal_response !== undefined) {
-        updateData.arousal_response = params.arousal_response;
-      }
-      if (params.tension_response !== undefined) {
-        updateData.tension_response = params.tension_response;
-      }
-      if (params.warmth_response !== undefined) {
-        updateData.warmth_response = params.warmth_response;
-      }
-      if (params.intimacy_response !== undefined) {
-        updateData.intimacy_response = params.intimacy_response;
-      }
-      if (params.density_response !== undefined) {
-        updateData.density_response = params.density_response;
-      }
-      if (params.groundedness_response !== undefined) {
-        updateData.groundedness_response = params.groundedness_response;
-      }
-
-      // Build create object with all fields
-      const createData: any = {
-        userId: params.userId,
-        spotifyAlbumId: params.spotifyAlbumId,
-        albumName: params.albumName,
-        artist: params.artist,
-        imageUrl: params.imageUrl,
-        seasons: params.seasons || [],
-        emotions: params.emotions || [],
-        whenYouListen: params.whenYouListen || [],
-        vibe: params.vibe || [],
-        optionalNote: params.optionalNote
-      };
-
-      // Add optional fields to create if defined
-      if (params.movementPreference !== undefined) {
-        createData.movementPreference = params.movementPreference;
-      }
-      if (params.valence_response !== undefined) {
-        createData.valence_response = params.valence_response;
-      }
-      if (params.arousal_response !== undefined) {
-        createData.arousal_response = params.arousal_response;
-      }
-      if (params.tension_response !== undefined) {
-        createData.tension_response = params.tension_response;
-      }
-      if (params.warmth_response !== undefined) {
-        createData.warmth_response = params.warmth_response;
-      }
-      if (params.intimacy_response !== undefined) {
-        createData.intimacy_response = params.intimacy_response;
-      }
-      if (params.density_response !== undefined) {
-        createData.density_response = params.density_response;
-      }
-      if (params.groundedness_response !== undefined) {
-        createData.groundedness_response = params.groundedness_response;
-      }
-
-      // Upsert prevents duplicate surveys for same user+album
-      // First, find or create the Album record with spotifyAlbumId
-      let album = await prisma.album.findUnique({
-        where: { spotifyId: params.spotifyAlbumId }
+      // Step 1: Create or update Album, ALWAYS ensuring title, artist, and imageUrl are current
+      // Look up album via AlbumExternalId (provider-agnostic identity)
+      const existingExtId = await prisma.albumExternalId.findFirst({
+        where: { provider: 'spotify', externalId: params.spotifyAlbumId },
+        include: { album: true }
       });
-      
+      let album = existingExtId?.album ?? null;
+
+      // If not found by Spotify external ID, check if it's a catalog album UUID
       if (!album) {
-        // Create album if it doesn't exist yet
+        const byInternalId = await prisma.album.findUnique({ where: { id: params.spotifyAlbumId } });
+        if (byInternalId) {
+          album = byInternalId;
+          console.log(`[SURVEY]   - Found as catalog album by internal ID`);
+        }
+      }
+
+      if (!album) {
+        console.log(`[SURVEY]   - Creating new album record`);
         album = await prisma.album.create({
           data: {
-            spotifyId: params.spotifyAlbumId,
             title: params.albumName,
             artist: params.artist,
-            imageUrl: params.imageUrl
+            imageUrl: params.imageUrl || "",
+            externalIds: {
+              create: {
+                provider: 'spotify',
+                externalId: params.spotifyAlbumId,
+                providerMetadata: {
+                  url: `https://open.spotify.com/album/${params.spotifyAlbumId}`,
+                  uri: `spotify:album:${params.spotifyAlbumId}`
+                }
+              }
+            }
           }
         });
+        console.log(`[SURVEY]   ✓ Album created with imageUrl: ${params.imageUrl ? 'YES' : 'EMPTY'}`);
+      } else {
+        // Always update existing album to ensure title, artist, imageUrl are current
+        console.log(`[SURVEY]   - Album exists, updating with latest data (imageUrl: ${params.imageUrl ? 'PROVIDED' : 'NONE'})`);
+        album = await prisma.album.update({
+          where: { id: album.id },
+          data: {
+            title: params.albumName,
+            artist: params.artist,
+            imageUrl: params.imageUrl || album.imageUrl || ""
+          }
+        });
+        console.log(`[SURVEY]   ✓ Album updated. Final imageUrl: ${album.imageUrl ? 'YES' : 'EMPTY'}`);
       }
 
+      // Step 2: Create or update AlbumSurvey (marks survey as completed for this album)
       const survey = await prisma.albumSurvey.upsert({
         where: {
           userId_albumId: {
@@ -184,14 +148,56 @@ class SurveyService {
             albumId: album.id
           }
         },
-        update: updateData,
+        update: {
+          updatedAt: new Date()
+        },
         create: {
-          ...createData,
+          userId: params.userId,
           albumId: album.id
         }
       });
 
-      console.log(`[SURVEY] Phase 1 survey saved for album ${params.spotifyAlbumId}:`, {
+      // Step 3: Get all dimensions from database
+      const dimensions = await prisma.dimension.findMany();
+      
+      // Create a map of dimension names to IDs
+      const dimensionMap = new Map(dimensions.map(d => [d.name, d.id]));
+
+      // Step 4: Save each dimension response to UserAlbumPerceptionDimension
+      const dimensionResponses = [
+        { name: 'valence', value: params.valence_response },
+        { name: 'arousal', value: params.arousal_response },
+        { name: 'tension', value: params.tension_response },
+        { name: 'warmth', value: params.warmth_response },
+        { name: 'intimacy', value: params.intimacy_response },
+        { name: 'density', value: params.density_response },
+        { name: 'groundedness', value: params.groundedness_response }
+      ];
+
+      for (const { name, value } of dimensionResponses) {
+        if (value !== undefined && dimensionMap.has(name)) {
+          await prisma.userAlbumPerceptionDimension.upsert({
+            where: {
+              userId_albumId_dimensionId: {
+                userId: params.userId,
+                albumId: album.id,
+                dimensionId: dimensionMap.get(name)!
+              }
+            },
+            update: {
+              value: Math.round(value) // Ensure 0-100 integer
+            },
+            create: {
+              userId: params.userId,
+              albumId: album.id,
+              dimensionId: dimensionMap.get(name)!,
+              value: Math.round(value)
+            }
+          });
+        }
+      }
+
+      console.log(`[SURVEY] Survey saved for album ${params.spotifyAlbumId}:`, {
         sliders: {
           valence: params.valence_response,
           arousal: params.arousal_response,
@@ -299,22 +305,40 @@ class SurveyService {
     try {
       // STAGE 1: Fetch survey records from database for this user
       const surveys = await prisma.albumSurvey.findMany({
-        where: { userId }, // Filter by user
-        orderBy: { createdAt: "desc" }, // Most recent first
-        take: limit, // Limit to requested number
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        take: limit,
         include: {
-          album: true  // Join with Album to get title, artist, etc.
+          album: {
+            include: { externalIds: { where: { provider: 'spotify' } } }
+          }
         }
       });
 
       // STAGE 2: Transform survey records to FormattedAlbumDTO
-      return surveys.map((survey) => ({
-        spotifyId: survey.album.spotifyId,
-        name: survey.album.title,
-        artist: survey.album.artist,
-        imageUrl: survey.album.imageUrl || "",  // Default to empty string if null
-        spotifyUrl: survey.album.spotifyUrl || `https://open.spotify.com/album/${survey.album.spotifyId}`,
-      }));
+      const result = surveys.map((survey) => {
+        const spotifyExt = survey.album.externalIds[0];
+        const spotifyId = spotifyExt?.externalId || '';
+        const meta = spotifyExt?.providerMetadata as Record<string, string> | null;
+        const spotifyUrl = meta?.url || (spotifyId ? `https://open.spotify.com/album/${spotifyId}` : '');
+        return {
+          spotifyId,
+          name: survey.album.title,
+          artist: survey.album.artist,
+          imageUrl: survey.album.imageUrl || "",
+          spotifyUrl,
+        };
+      });
+
+      // Log for debugging image URLs
+      if (result.length > 0) {
+        console.log(`[SURVEY] Retrieved ${result.length} surveyed albums for user ${userId}`);
+        result.slice(0, 2).forEach((album, i) => {
+          console.log(`[SURVEY]   Album ${i + 1}: "${album.name}" - imageUrl: ${album.imageUrl ? `✓ (${album.imageUrl.substring(0, 50)}...)` : "❌ EMPTY"}`);
+        });
+      }
+
+      return result;
     } catch (error) {
       console.error("Error fetching surveyed albums:", error);
       return [];
@@ -375,14 +399,64 @@ class SurveyService {
         }))
       );
 
-      // Convert back to FormattedAlbumDTO format
-      return anchorAlbums.map(anchor => ({
+      // Convert Spotify anchors to FormattedAlbumDTO
+      const spotifyAnchors: FormattedAlbumDTO[] = anchorAlbums.map(anchor => ({
         spotifyId: anchor.spotifyAlbumId,
         name: anchor.albumName,
         artist: anchor.artist,
         imageUrl: anchor.imageUrl || "",
-        spotifyUrl: ""
+        spotifyUrl: "",
+        source: 'spotify' as const
       }));
+
+      // Top up with catalog albums if fewer than 15 Spotify anchors
+      const TARGET_COUNT = 15;
+      if (spotifyAnchors.length < TARGET_COUNT) {
+        const needed = TARGET_COUNT - spotifyAnchors.length;
+
+        // Build exclusion set from anchor list (by normalized title+artist)
+        const anchorKeys = new Set(spotifyAnchors.map(a =>
+          `${a.name.toLowerCase().trim()}|${a.artist.toLowerCase().trim()}`
+        ));
+
+        // Get already-surveyed album IDs from DB (works for both Spotify + catalog albums)
+        const surveyedRecords = await prisma.albumSurvey.findMany({
+          where: { userId },
+          select: { albumId: true }
+        });
+        const surveyedAlbumIds = surveyedRecords.map(r => r.albumId);
+
+        const catalogAlbums = await prisma.album.findMany({
+          where: {
+            enrichmentStatus: "embedded",
+            id: { notIn: surveyedAlbumIds }
+          },
+          select: { id: true, title: true, artist: true, imageUrl: true },
+          take: needed * 3, // over-fetch to account for dedup
+          orderBy: { embeddingComputedAt: "desc" }
+        });
+
+        const supplements: FormattedAlbumDTO[] = [];
+        for (const a of catalogAlbums) {
+          if (supplements.length >= needed) break;
+          const key = `${a.title.toLowerCase().trim()}|${a.artist.toLowerCase().trim()}`;
+          if (!anchorKeys.has(key)) {
+            supplements.push({
+              spotifyId: a.id, // internal UUID used as survey key
+              name: a.title,
+              artist: a.artist,
+              imageUrl: a.imageUrl || "",
+              spotifyUrl: "",
+              source: 'catalog' as const
+            });
+          }
+        }
+
+        console.log(`[SURVEY] Supplemented with ${supplements.length} catalog albums`);
+        return [...spotifyAnchors, ...supplements];
+      }
+
+      return spotifyAnchors;
     } catch (error) {
       console.error("Error getting available albums for survey:", error);
       throw error;

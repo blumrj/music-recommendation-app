@@ -17,32 +17,26 @@
  *
  *   STAGE 2: MULTI-FACTOR RANKING (Return top 10)
  *   ──────────────────────────────────────────────
- *   Score each candidate using 4 factors:
- *   - 55% Emotional Similarity (13D cosine similarity)
- *   - 20% Listening History (saved/liked by user)
- *   - 15% Novelty (not recently recommended)
- *   - 10% Diversity (artist variety in result set)
+ *   Score each candidate using 2 factors:
+ *   - 90% Emotional Similarity (7D cosine similarity to user state)
+ *   - 10% Diversity (artist variety penalty during selection)
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * BENEFITS OVER SINGLE-STAGE:
+ * BENEFITS OF 2-FACTOR MODEL:
  * ✓ Diverse candidates = more exploration (not just similar to seed)
- * ✓ Multi-factor ranking = personalization beyond emotion
- * ✓ History awareness = respects user's listening patterns
- * ✓ Novelty boost = fresh recommendations over time
+ * ✓ Multi-factor ranking = emotional matching + artist variety
+ * ✓ Always fresh = no stale cached results (recomputes per request)
+ * ✓ Simpler algorithm = easier to debug and maintain
  * ✓ Diversity penalty = prevents artist over-representation
  *
- * FORMULA - Multi-Factor Score:
- * ────────────────────────────
- *   Score = (0.55 × emotionalSim) +
- *           (0.20 × historyScore) +
- *           (0.15 × noveltyScore) +
+ * FORMULA - Emotional Similarity + Diversity:
+ * ────────────────────────────────────────────
+ *   Score = (0.90 × emotionalSim) +
  *           (0.10 × diversityScore)
  *
  * Where:
  *   emotionalSim   ∈ [0,1]  (cosine similarity to user state)
- *   historyScore   ∈ [0,1]  (inverse recency of saves)
- *   noveltyScore   ∈ [0,1]  (inverse recency of recommendation)
  *   diversityScore ∈ [0,1]  (penalized by artist frequency in results)
  *
  * @category Services
@@ -91,8 +85,8 @@ const album_embedding_orchestrator_1 = require("../embeddings/album-embedding.or
 const albums_service_1 = require("./albums.service");
 const candidate_pool_service_1 = require("../discovery/candidate-pool.service");
 const weather_service_1 = require("../context/weather.service");
-const auth_service_1 = require("../auth/auth.service");
 const users_service_1 = require("../users/users.service");
+const logger_1 = require("../../shared/logger");
 const vectorMath = __importStar(require("../../shared/math/vector"));
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
@@ -109,23 +103,16 @@ class RecommendationService {
     /**
      * Compute current user state: taste profile + context modifiers
      *
-     * REPLACES old blendProfileWithWeather with vector addition approach
      *
      * @private
      * @param {Vector13D|null} userProfile - User's 13D taste profile (or null if new)
      * @param {Object} weatherContext - Weather context with modifier deltas
      *
-     * @returns {Vector13D} Current user state in 13D space
+     * @returns {Vector13D} Current user state in dimensions
      *
-     * NEW APPROACH - ADDITIVE MODIFIERS:
-     * Instead of: State = (User × 0.6) + (Weather × 0.4)
-     * Now use:    State = UserProfile + WeatherModifier
+     * State = UserProfile + WeatherModifier
      *
-     * This is SUBTLER and more ACCURATE:
-     * - User profile stays stable (don't degrade it for weather)
      * - Context modifiers are soft adjustments [-0.3, +0.3] per dimension
-     * - Multiple factors compound naturally (cold + rainy + night synergize)
-     * - Result is always valid 13D vector (all dimensions 0-1)
      *
      * FALLBACK BEHAVIOR:
      * - If no user profile: start from neutral (0.5 all dims), apply weather
@@ -137,121 +124,22 @@ class RecommendationService {
      * Weather mod:  { warmth: +0.15, introspection: +0.20 }
      * Result:       { valence: 0.7, arousal: 0.6, warmth: 0.55, introspection: ...0.20+base... }
      */
-    computeCurrentUserState(userProfile, weatherContext, perceptionBias) {
+    computeCurrentUserState(userProfile, weatherContext) {
         // Start with user profile or neutral
         const baseProfile = userProfile ?? vectorMath.createNeutralVector();
-        // Apply perception bias if available
-        // Bias is softened to 50% - it gently shifts recommendations, not overrides them
-        let stateWithBias = baseProfile;
-        if (perceptionBias) {
-            const softBias = {
-                valence: perceptionBias.valence * 0.5,
-                arousal: perceptionBias.arousal * 0.5,
-                tension: perceptionBias.tension * 0.5,
-                warmth: perceptionBias.warmth * 0.5,
-                intimacy: perceptionBias.intimacy * 0.5,
-                density: perceptionBias.density * 0.5,
-                groundedness: perceptionBias.groundedness * 0.5
-            };
-            stateWithBias = vectorMath.addVectors(baseProfile, softBias);
-            console.log("[RECS] Applied perception bias (50% strength) to user state");
-        }
         // Apply weather context modifiers (additive, soft influence)
         if (weatherContext?.contextModifier) {
-            return vectorMath.addVectors(stateWithBias, weatherContext.contextModifier);
+            logger_1.logger.info("STATE", `Weather modifier: arousal=${weatherContext.contextModifier.arousal}, valence=${weatherContext.contextModifier.valence}`);
+            const result = vectorMath.addVectors(baseProfile, weatherContext.contextModifier);
+            logger_1.logger.info("STATE", `After adding: arousal=${result.arousal.toFixed(3)} (was ${baseProfile.arousal.toFixed(3)})`);
+            return result;
         }
-        return stateWithBias;
+        logger_1.logger.warn("STATE", `No weather modifier found in context`);
+        return baseProfile;
     }
     // ═════════════════════════════════════════════════════════════════════════════════
     // PHASE 4: STAGE 2 - MULTI-FACTOR RANKING (Score and rank candidates)
     // ═════════════════════════════════════════════════════════════════════════════════
-    /**
-     * Compute emotional similarity score (55% weight)
-     *
-     * 13D cosine similarity between user state and album embedding
-     *
-     * @private
-     * @param {Vector13D} userState - User's current emotional state
-     * @param {Vector13D} albumEmbedding - Album's 13D embedding
-     *
-     * @returns {number} Similarity score [0, 1]
-     */
-    computeEmotionalSimilarity(userState, albumEmbedding) {
-        return vectorMath.cosineSimilarity(userState, albumEmbedding);
-    }
-    /**
-     * Compute listening history score (20% weight)
-     *
-     * Albums saved/liked by user get higher scores
-     * Older saves get lower scores (more novelty to recent)
-     *
-     * @private
-     * @param {string} spotifyAlbumId - Album to score
-     * @param {string} [userId] - User to check against
-     *
-     * @returns {Promise<number>} History score [0, 1]
-     */
-    async computeHistoryScore(spotifyAlbumId, userId) {
-        if (!userId)
-            return 0.5; // Neutral if no user
-        try {
-            // Check if user has saved this album before
-            const favorite = await prisma.favorite.findFirst({
-                where: {
-                    userId,
-                    albumSpotifyId: spotifyAlbumId
-                }
-            });
-            if (!favorite)
-                return 0.3; // Not saved = low history score
-            // If saved: score based on recency (older saves = lower novelty, but they like it)
-            const daysSinceSave = Math.floor((Date.now() - favorite.createdAt.getTime()) / (1000 * 60 * 60 * 24));
-            // Score: 0.7 if saved recently, down to 0.5 if saved long ago
-            return Math.max(0.5, 0.7 - (daysSinceSave / 365) * 0.2);
-        }
-        catch (error) {
-            console.warn("[PHASE4-S2] History score error:", error.message);
-            return 0.5;
-        }
-    }
-    /**
-     * Compute novelty score (15% weight)
-     *
-     * Albums recently recommended get penalized
-     * Novel albums (not recommended recently) get boosted
-     *
-     * @private
-     * @param {string} spotifyAlbumId - Album to score
-     * @param {string} [userId] - User to check against
-     *
-     * @returns {Promise<number>} Novelty score [0, 1]
-     */
-    async computeNoveltyScore(spotifyAlbumId, userId) {
-        if (!userId)
-            return 0.7; // Assume novel if no user
-        try {
-            // Check most recent recommendation of this album to user
-            const recentRec = await prisma.recommendation.findFirst({
-                where: {
-                    userId,
-                    spotifyId: spotifyAlbumId
-                },
-                orderBy: {
-                    generatedAt: "desc"
-                }
-            });
-            if (!recentRec)
-                return 1.0; // Never recommended = fully novel
-            // Score based on days since last recommendation
-            const daysSinceRec = Math.floor((Date.now() - recentRec.generatedAt.getTime()) / (1000 * 60 * 60 * 24));
-            // Score: 0.2 if recommended today, up to 1.0 if >30 days
-            return Math.min(1.0, 0.2 + (daysSinceRec / 30) * 0.8);
-        }
-        catch (error) {
-            console.warn("[PHASE4-S2] Novelty score error:", error.message);
-            return 0.7;
-        }
-    }
     /**
      * Compute diversity score (10% weight)
      *
@@ -275,91 +163,67 @@ class RecommendationService {
         return 0.2;
     }
     /**
-     * STAGE 2: Multi-factor ranking
+     * Score all album candidates using 2-factor model
      *
-     * Scores and ranks all candidates using 4-factor model:
-     * - 55% Emotional Similarity (13D)
-     * - 20% Listening History
-     * - 15% Novelty
-     * - 10% Diversity
+     * Computes embeddings and scores for each candidate in parallel:
+     * - Emotional Similarity (90%)
+     * - Returns composite score (diversity added during selection)
      *
      * @private
      * @async
-     * @param {Array} candidates - Candidate albums to rank
-     * @param {Vector13D} userState - User's emotional state
-     * @param {string} [userId] - User ID for history/novelty
+     * @param {Array} candidates - Candidate albums to score
+     * @param {Vector7D} userState - User's emotional state
      *
-     * @returns {Promise<Array>} Top 10 ranked albums
+     * @returns {Promise<Array>} Scored albums with embedding and composite score
      */
-    async rankCandidates(candidates, userState, userId) {
-        console.log("[PHASE4-S2] Ranking candidates with 4-factor model...");
+    async scoreAlbumCandidates(candidates, userState) {
+        logger_1.logger.info("RANK", `Scoring ${candidates.length} candidates with 2-factor model`);
         const scored = await Promise.all(candidates.map(async (album) => {
             try {
-                // Compute 13D embedding for this album
-                const audioFeaturesObj = album.audioFeatures
-                    ? {
-                        danceability: album.audioFeatures.danceability || 0.5,
-                        energy: album.audioFeatures.energy || 0.5,
-                        loudness: album.audioFeatures.loudness || -30,
-                        speechiness: album.audioFeatures.speechiness || 0.1,
-                        acousticness: album.audioFeatures.acousticness || 0.5,
-                        instrumentalness: album.audioFeatures.instrumentalness || 0.2,
-                        liveness: album.audioFeatures.liveness || 0.2,
-                        valence: album.audioFeatures.valence || 0.5,
-                        tempo: album.audioFeatures.tempo || 120,
-                        mode: album.audioFeatures.mode || 1,
-                        key: album.audioFeatures.key || 0
-                    }
-                    : {
-                        danceability: 0.5,
-                        energy: 0.5,
-                        loudness: -30,
-                        speechiness: 0.1,
-                        acousticness: 0.5,
-                        instrumentalness: 0.2,
-                        liveness: 0.2,
-                        valence: 0.5,
-                        tempo: 120,
-                        mode: 1,
-                        key: 0
-                    };
-                const embedding = await album_embedding_orchestrator_1.albumEmbeddingService.getOrComputeEmbedding(album.spotifyAlbumId, audioFeaturesObj, {
+                // Compute 7D embedding for this album from Last.fm tags
+                const embedding = await album_embedding_orchestrator_1.albumEmbeddingService.getOrComputeEmbedding({
                     albumName: album.albumName,
                     artist: album.artist,
                     imageUrl: album.imageUrl,
                     spotifyUrl: album.spotifyUrl
                 });
-                // Factor 1: Emotional Similarity (55%)
-                const emotionalScore = this.computeEmotionalSimilarity(userState, embedding);
-                // Factor 2: Listening History (20%)
-                const historyScore = await this.computeHistoryScore(album.spotifyAlbumId, userId);
-                // Factor 3: Novelty (15%)
-                const noveltyScore = await this.computeNoveltyScore(album.spotifyAlbumId, userId);
-                // Composite score (diversity applied per-album during selection)
-                const compositeScore = 0.55 * emotionalScore + 0.2 * historyScore + 0.15 * noveltyScore;
+                // Factor 1: Emotional Similarity (90%)
+                const emotionalScore = vectorMath.cosineSimilarity(userState, embedding);
+                // Composite score (diversity applied during selection)
+                const compositeScore = 0.9 * emotionalScore;
                 // (0.1 diversity applied during final selection)
                 return {
                     ...album,
                     emotionalScore,
-                    historyScore,
-                    noveltyScore,
                     compositeScore,
                     embedding
                 };
             }
             catch (error) {
-                console.warn("[PHASE4-S2] Scoring failed for album:", error.message);
+                logger_1.logger.warn("RANK", `Scoring failed for ${album.albumName}: ${error.message}`);
                 return {
                     ...album,
                     emotionalScore: 0.5,
-                    historyScore: 0.5,
-                    noveltyScore: 0.5,
                     compositeScore: 0.5,
                     embedding: null
                 };
             }
         }));
-        // Select top 10 with diversity penalty applied
+        logger_1.logger.info("RANK", `✓ Scored ${scored.length} albums`);
+        return scored;
+    }
+    /**
+     * Select top 10 albums with diversity penalty applied
+     *
+     * Sorts by composite score, applies diversity penalty (0.1 weight),
+     * and selects top 10 albums ensuring artist variety.
+     *
+     * @private
+     * @param {Array} scored - Pre-scored albums with composite scores
+     *
+     * @returns {Array} Top 10 selected albums with finalScore
+     */
+    selectWithDiversityPenalty(scored) {
         const selected = [];
         const sortedByScore = scored.sort((a, b) => b.compositeScore - a.compositeScore);
         for (const album of sortedByScore) {
@@ -375,299 +239,166 @@ class RecommendationService {
                 diversityScore
             });
         }
-        console.log(`[PHASE4-S2] ✓ Ranked ${selected.length} albums, top artist: ${selected[0]?.artist}`);
+        logger_1.logger.info("RANK", `✓ Selected ${selected.length} albums with diversity penalty, top: ${selected[0]?.artist}`);
         return selected;
+    }
+    /**
+     * Load user's taste profile and perception bias
+     *
+     * Fetches taste profile and perception bias from user service
+     *
+     * @private
+     * @async
+     * @param {string} [userId] - User ID to load profile for
+     *
+     * @returns {Promise<Object>} { userProfile, perceptionBias } (both may be null)
+     */
+    async loadUserProfile(userId) {
+        logger_1.logger.info("PROFILE", "Loading user 13D taste profile + perception bias");
+        let userProfile = null;
+        let perceptionBias = null;
+        if (userId) {
+            const profileLayers = await users_service_1.userService.getUserTasteProfileWithBias13D(userId);
+            if (profileLayers) {
+                userProfile = profileLayers.taste;
+                perceptionBias = profileLayers.bias;
+                logger_1.logger.info("PROFILE", "✓ User profile found (with perception bias)");
+            }
+            else {
+                logger_1.logger.warn("PROFILE", "⚠️ No profile yet (using neutral)");
+            }
+        }
+        return { userProfile, perceptionBias };
+    }
+    /**
+     * Format ranked albums into response shape
+     *
+     * Extracts top 10 and transforms internal representation to API response
+     *
+     * @private
+     * @param {Array} ranked - Ranked albums with scores
+     *
+     * @returns {Array} Formatted recommendations for API response
+     */
+    formatRecommendations(ranked) {
+        logger_1.logger.info("FORMAT", "Formatting top 10 recommendations");
+        const topRecommendations = ranked.slice(0, 10).map(({ compositeScore, finalScore, emotionalScore, ...rest }) => ({
+            id: rest.spotifyAlbumId,
+            name: rest.albumName,
+            artist: rest.artist,
+            image: rest.imageUrl,
+            spotifyUrl: rest.spotifyUrl,
+            emotionalScore: emotionalScore.toFixed(3),
+            finalScore: finalScore.toFixed(3)
+        }));
+        logger_1.logger.info("FORMAT", `✓ Formatted ${topRecommendations.length} recommendations`);
+        return topRecommendations;
+    }
+    /**
+     * Enrich Last.fm-only recommendations with Spotify URLs
+     *
+     * Looks up missing or search-only Spotify URLs for Last.fm albums
+     *
+     * @private
+     * @async
+     * @param {Array} recommendations - Recommendations to enrich
+     * @param {string} spotifyToken - Spotify API token
+     */
+    async enrichSpotifyUrls(recommendations, spotifyToken) {
+        logger_1.logger.info("ENRICH", "Enriching Spotify URLs for Last.fm candidates");
+        for (const rec of recommendations) {
+            if (!rec.spotifyUrl || rec.spotifyUrl.includes("?q=")) {
+                logger_1.logger.info("ENRICH", `Looking up Spotify ID for "${rec.name}" by ${rec.artist}`);
+                const spotifyUrl = await albums_service_1.albumService.searchAlbumOnSpotify(rec.name, rec.artist, spotifyToken);
+                if (spotifyUrl) {
+                    rec.spotifyUrl = spotifyUrl;
+                    logger_1.logger.info("ENRICH", `✓ Found: ${spotifyUrl}`);
+                }
+                else {
+                    logger_1.logger.warn("ENRICH", "⚠️ Not found on Spotify, keeping original URL");
+                }
+            }
+        }
     }
     /**
      * Generate recommendations - MAIN ENTRY POINT (PHASE 4: TWO-STAGE ALGORITHM)
      *
+     * Two-stage pipeline: candidate generation (80 albums) → multi-factor ranking (top 10)
+     * Scoring: 90% emotional similarity + 10% diversity penalty
+     *
      * @async
-     * @param {string} spotifyToken - Valid Spotify access token
+     * @param {string} spotifyToken - Fresh Spotify access token (pre-refreshed by authMiddleware)
      * @param {number} lat - User latitude coordinate
      * @param {number} lon - User longitude coordinate
-     * @param {string} [userId] - Optional: User ID from JWT (for profile/caching)
-     * @param {string} [spotifyRefreshToken] - Optional: Refresh token for token renewal
+     * @param {string} [userId] - Optional: User ID from JWT
      *
      * @returns {Promise<Object>} Recommendation response
-     * @returns {Array<Object>} returns.recommendations - Top 3 albums
+     * @returns {Array<Object>} returns.recommendations - Top 10 albums
      * @returns {string} returns.recommendations[].id - Spotify album ID
      * @returns {string} returns.recommendations[].name - Album title
      * @returns {string} returns.recommendations[].artist - Artist name
      * @returns {string} returns.recommendations[].image - Album cover URL
      * @returns {string} returns.recommendations[].spotifyUrl - Link to Spotify
-     * @returns {string} returns.mood - Weather mood (Sunny, Rainy, etc.)
-     * @returns {Object} returns.weather - Weather data
-     * @returns {string} returns.weather.condition - Weather condition
-     * @returns {number} returns.weather.temp - Temperature (Celsius)
-     * @returns {number} returns.weather.humidity - Humidity percentage
-     * @returns {boolean} returns.cached - Whether from cache
+     * @returns {number} returns.recommendations[].emotionalScore - Similarity score [0,1]
+     * @returns {number} returns.recommendations[].finalScore - Composite score with diversity [0,1]
      * @returns {Date} returns.generatedAt - Generation timestamp
      *
      * @throws {Error} Any error in pipeline stages
-     *
-     * 12-STAGE ALGORITHM PIPELINE:
-     *
-     * **STAGE 1: Preparation**
-     * - Refresh Spotify token if needed (maintains API access)
-     * - Load weather at coordinates
-     * - Load user's taste profile (from surveys)
-     *
-     * **STAGE 2: Personalization (Blending)**
-     * - Blend user taste (60%) + weather mood (40%)
-     * - Result: Personalized emotional profile
-     *
-     * **STAGE 3: Discovery (Audio Analysis)**
-     * - Extract seed artists from emotional dimensions
-     * - Convert dimensions to Spotify audio targets
-     * - Call Spotify /recommendations with targets
-     *
-     * **STAGE 4: Filtering**
-     * - Filter out albums user already saved
-     * - Keep only new discovery candidates
-     *
-     * **STAGE 5: Ranking**
-     * - Score each by similarity to blended profile
-     * - Sort by score (highest first)
-     * - Return top 3
-     *
-     * **STAGE 6: Cache**
-     * - Save recommendations to database
-     * - Fast retrieval on next request
-     *
-     * RESULT:
-     * User gets personalized recommendations that adapt to:
-     * ✓ Their musical taste (from surveys)
-     * ✓ Current weather/mood
-     * ✓ Geographic location
-     * ✓ Previously saved albums (no duplicates)
-     *
-     * @example
-     * const recommendations = await recommendationService.generateRecommendations(
-     *   accessToken,
-     *   40.7128,  // NYC latitude
-     *   -74.0060, // NYC longitude
-     *   userId,
-     *   refreshToken
-     * );
-     *
-     * // Response:
-     * // {
-     * //   mood: "Rainy",
-     * //   weather: { condition: "Rainy", temp: 15, humidity: 85 },
-     * //   recommendations: [
-     * //     { id: "...", name: "Album", artist: "Artist", image: "...", spotifyUrl: "..." }
-     * //   ],
-     * //   cached: false,
-     * //   generatedAt: 2024-03-15T10:30:00Z
-     * // }
      */
-    async generateRecommendations(spotifyToken, lat, lon, userId, spotifyRefreshToken) {
+    async generateRecommendations(spotifyToken, lat, lon, userId) {
         try {
-            console.log("\n" + "=".repeat(80));
-            console.log("PHASE 4: TWO-STAGE RECOMMENDATION ALGORITHM");
-            console.log("=".repeat(80));
-            console.log(`[MAIN] Generating recommendations for user: ${userId || "anonymous"}`);
-            console.log(`[MAIN] Location: ${lat}, ${lon}`);
-            // STEP 0: CHECK CACHE (optional, disabled for testing new discovery)
-            if (userId) {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const cached = await prisma.recommendation.findMany({
-                    where: {
-                        userId,
-                        generatedAt: { gte: today }
-                    },
-                    take: 10
-                });
-                if (cached.length >= 10) {
-                    console.log("[MAIN] ✓ Found cached recommendations");
-                    const cachedRecommendations = cached.map((r) => ({
-                        id: r.spotifyId,
-                        name: r.title,
-                        artist: r.artist,
-                        image: r.imageUrl,
-                        spotifyUrl: r.spotifyUrl,
-                        cached: true
-                    }));
-                    return {
-                        recommendations: cachedRecommendations,
-                        weather: { condition: "Cached", temp: 0, humidity: 0 },
-                        cached: true,
-                        generatedAt: cached[0].generatedAt
-                    };
-                }
-            }
-            // STEP 1: REFRESH SPOTIFY TOKEN
-            console.log("\n[MAIN] STEP 1: Refreshing Spotify token");
-            let token = spotifyToken;
-            if (userId && spotifyRefreshToken && spotifyRefreshToken.length > 0) {
-                try {
-                    const newTokens = await auth_service_1.authService.refreshAccessToken(spotifyRefreshToken);
-                    token = newTokens.access_token;
-                    // Update user's token in database for next use
-                    await prisma.user.update({
-                        where: { id: userId },
-                        data: { spotifyToken: token }
-                    });
-                    console.log("[MAIN]   ✓ Token refreshed");
-                }
-                catch (error) {
-                    console.warn("[MAIN]   ⚠️  Token refresh failed, continuing:", error.message);
-                }
-            }
-            // STEP 2: GET WEATHER CONTEXT
-            console.log("\n[MAIN] STEP 2: Fetching weather context");
+            // STEP 1-3: Load Requirements
+            // Fetch weather context and user's taste profile from database
             const weatherContext = await weather_service_1.weatherService.getWeatherContextWithModifiers(lat, lon);
-            console.log(`[MAIN]   ✓ Weather: ${weatherContext.condition}, ${weatherContext.temp}°C`);
-            // STEP 3: LOAD USER PROFILE
-            console.log("\n[MAIN] STEP 3: Loading user 13D taste profile + perception bias");
-            let userProfile = null;
-            let perceptionBias = null;
-            if (userId) {
-                const profileLayers = await users_service_1.userService.getUserTasteProfileWithBias13D(userId);
-                if (profileLayers) {
-                    userProfile = profileLayers.taste;
-                    perceptionBias = profileLayers.bias;
-                    console.log(`[MAIN]   ✓ User profile found (with perception bias)`);
-                }
-                else {
-                    console.log(`[MAIN]   ⚠️  No profile yet (using neutral)`);
-                }
-            }
-            // STEP 4: COMPUTE CURRENT USER STATE
-            console.log("\n[MAIN] STEP 4: Computing user state (profile + bias + weather)");
-            const currentUserState = this.computeCurrentUserState(userProfile, weatherContext, perceptionBias || undefined);
-            console.log(`[MAIN]   ✓ User state computed in 13D space (valence=${currentUserState.valence.toFixed(2)}, arousal=${currentUserState.arousal.toFixed(2)})`);
+            const { userProfile } = await this.loadUserProfile(userId);
+            // STEP 4: Compute User State
+            // Blend user's taste profile with weather context modifiers using vector addition
+            const currentUserState = this.computeCurrentUserState(userProfile, weatherContext);
             // ═════════════════════════════════════════════════════════════════════════════
             // PHASE 4 STAGE 1: CANDIDATE GENERATION
             // ═════════════════════════════════════════════════════════════════════════════
-            console.log("\n" + "─".repeat(80));
-            console.log("PHASE 4 - STAGE 1: CANDIDATE GENERATION");
-            console.log("─".repeat(80));
+            logger_1.logger.info("MAIN", "─".repeat(80));
+            logger_1.logger.info("MAIN", "PHASE 4 - STAGE 1: CANDIDATE GENERATION");
+            logger_1.logger.info("MAIN", "─".repeat(80));
             if (!userId) {
-                console.warn("[PHASE4-S1] No userId provided - cannot generate Last.fm-based candidates");
+                logger_1.logger.warn("MAIN", "No userId provided - cannot generate Last.fm-based candidates");
                 return {
                     recommendations: [],
-                    weather: {
-                        condition: weatherContext.condition,
-                        temp: weatherContext.temp,
-                        humidity: weatherContext.humidity
-                    },
-                    cached: false,
                     generatedAt: new Date()
                 };
             }
             const candidates = await candidate_pool_service_1.candidatePoolService.generateCandidatePool(userId, 0.1, 80);
             if (candidates.length === 0) {
-                console.log("[MAIN] ⚠️  No candidates generated");
+                logger_1.logger.warn("MAIN", "No candidates generated");
                 return {
                     recommendations: [],
-                    weather: {
-                        condition: weatherContext.condition,
-                        temp: weatherContext.temp,
-                        humidity: weatherContext.humidity
-                    },
-                    cached: false,
                     generatedAt: new Date()
                 };
             }
-            console.log(`[MAIN] ✓ STAGE 1 complete: ${candidates.length} candidates`);
+            logger_1.logger.info("MAIN", `✓ STAGE 1 complete: ${candidates.length} candidates`);
+            // ═════════════════════════════════════════════════════════════════════════════
             // ═════════════════════════════════════════════════════════════════════════════
             // PHASE 4 STAGE 2: MULTI-FACTOR RANKING
             // ═════════════════════════════════════════════════════════════════════════════
-            console.log("\n" + "─".repeat(80));
-            console.log("PHASE 4 - STAGE 2: MULTI-FACTOR RANKING");
-            console.log("─".repeat(80));
-            const ranked = await this.rankCandidates(candidates, currentUserState, userId);
-            if (ranked.length === 0) {
-                console.log("[MAIN] ⚠️  No candidates ranked");
-                return {
-                    recommendations: [],
-                    weather: {
-                        condition: weatherContext.condition,
-                        temp: weatherContext.temp,
-                        humidity: weatherContext.humidity
-                    },
-                    cached: false,
-                    generatedAt: new Date()
-                };
-            }
-            // Format final recommendations (top 10)
-            const topRecommendations = ranked.slice(0, 10).map(({ compositeScore, finalScore, emotionalScore, ...rest }) => ({
-                id: rest.spotifyAlbumId,
-                name: rest.albumName,
-                artist: rest.artist,
-                image: rest.imageUrl,
-                spotifyUrl: rest.spotifyUrl,
-                emotionalScore: emotionalScore.toFixed(3),
-                finalScore: finalScore.toFixed(3)
-            }));
-            console.log(`[MAIN] ✓ STAGE 2 complete: Top 10 selected`);
-            // STEP 3B: LOOKUP SPOTIFY URLs FOR LAST.FM ALBUMS
-            console.log("\n[MAIN] STEP 3B: Enriching Spotify URLs for Last.fm candidates");
-            for (const rec of topRecommendations) {
-                // Check if URL is missing or is a search URL (not a direct Spotify link)
-                if (!rec.spotifyUrl || rec.spotifyUrl.includes('?q=')) {
-                    console.log(`[MAIN]   Looking up Spotify ID for "${rec.name}" by ${rec.artist}...`);
-                    const spotifyUrl = await albums_service_1.albumService.searchAlbumOnSpotify(rec.name, rec.artist, spotifyToken);
-                    if (spotifyUrl) {
-                        rec.spotifyUrl = spotifyUrl;
-                        console.log(`[MAIN]   ✓ Found: ${spotifyUrl}`);
-                    }
-                    else {
-                        console.log(`[MAIN]   ⚠️  Not found on Spotify, keeping original URL`);
-                    }
-                }
-            }
-            // STEP 5: CACHE RECOMMENDATIONS
-            console.log("\n[MAIN] STEP 5: Caching recommendations");
-            if (userId && topRecommendations.length > 0) {
-                try {
-                    // Only cache recommendations that have spotifyId (Spotify-backed)
-                    // Skip Last.fm-only recommendations (no stable ID)
-                    const spotifyBacked = topRecommendations.filter(rec => rec.id);
-                    if (spotifyBacked.length > 0) {
-                        await prisma.recommendation.createMany({
-                            data: spotifyBacked.map((rec) => ({
-                                userId,
-                                spotifyId: rec.id,
-                                title: rec.name,
-                                artist: rec.artist,
-                                imageUrl: rec.image || "",
-                                spotifyUrl: rec.spotifyUrl || "",
-                                lat,
-                                lon,
-                                generatedAt: new Date()
-                            }))
-                        });
-                        console.log(`[MAIN]   ✓ ${spotifyBacked.length} cached (${topRecommendations.length - spotifyBacked.length} Last.fm-only, not cached)`);
-                    }
-                    else {
-                        console.log(`[MAIN]   ℹ️  No Spotify-backed recommendations to cache (all Last.fm-only)`);
-                    }
-                }
-                catch (error) {
-                    console.warn("[MAIN]   ⚠️  Cache failed:", error.message);
-                }
-            }
-            console.log("\n" + "=".repeat(80));
-            console.log("✨ PHASE 4 COMPLETE - TOP 10 RECOMMENDATIONS READY");
-            console.log("=".repeat(80) + "\n");
+            // Score all candidates: 90% emotional similarity to user state
+            // Compute 7D embeddings and cosine similarity in parallel
+            const scored = await this.scoreAlbumCandidates(candidates, currentUserState);
+            // Apply diversity penalty and select top 10 albums
+            // Penalizes repeated artists, ensures artist variety in final results
+            const ranked = this.selectWithDiversityPenalty(scored);
+            // Transform internal scoring format into API response shape
+            const topRecommendations = this.formatRecommendations(ranked);
+            // Lookup and enrich Last.fm albums with actual Spotify URLs
+            // Only needed for Last.fm-only albums without stable Spotify IDs
+            await this.enrichSpotifyUrls(topRecommendations, spotifyToken);
             return {
                 recommendations: topRecommendations,
-                weather: {
-                    condition: weatherContext.condition,
-                    temp: weatherContext.temp,
-                    humidity: weatherContext.humidity,
-                    season: weatherContext.season,
-                    timeOfDay: weatherContext.timeOfDay
-                },
-                cached: false,
                 generatedAt: new Date()
             };
         }
         catch (error) {
-            console.error("[MAIN] Recommendation pipeline failed:", error);
+            // Recommendation pipeline failed at some stage
+            // Log error details and rethrow to controller
             throw error;
         }
     }
@@ -681,3 +412,4 @@ class RecommendationService {
  * @type {RecommendationService}
  */
 exports.recommendationService = new RecommendationService();
+//# sourceMappingURL=recommendation.service.js.map

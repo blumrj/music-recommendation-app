@@ -20,46 +20,12 @@
  * @category Services
  * @module services/signal-fusion
  */
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.signalFusionService = void 0;
 const tag_embedding_service_1 = require("./tag-embedding.service");
 const artist_embedding_service_1 = require("./artist-embedding.service");
 const emotional_dimensions_1 = require("../../config/emotional-dimensions");
 const genre_priors_1 = require("../../config/genre-priors");
-const vectorMath = __importStar(require("../../shared/math/vector"));
 const vector_1 = require("../../shared/math/vector");
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
@@ -86,28 +52,44 @@ class SignalFusionService {
      */
     async initializeGlobalPrior() {
         try {
-            const albums = await prisma.albumEmotionalEmbedding.findMany({
-                select: {
-                    valence: true,
-                    arousal: true,
-                    tension: true,
-                    warmth: true,
-                    intimacy: true,
-                    density: true,
-                    groundedness: true
-                },
-                take: 10000 // Limit to first 10k albums for performance
+            // Fetch all album intrinsic dimensions
+            const allDimensions = await prisma.albumIntrinsicProfileDimension.findMany({
+                include: { dimension: true }
             });
-            if (albums.length === 0) {
-                // No albums: use neutral prior
+            if (allDimensions.length === 0) {
+                // No albums with embeddings yet, use neutral
                 this.globalPrior = this.getNeutralEmbedding();
-                console.log(`[SIGNAL-FUSION] Global prior: neutral (no albums in DB)`);
-            }
-            else {
-                this.globalPrior = vectorMath.averageVectors(albums);
                 this.globalPriorTimestamp = Date.now();
-                console.log(`[SIGNAL-FUSION] Global prior initialized (${albums.length} albums)`);
+                console.log(`[SIGNAL-FUSION] Global prior initialized (no albums with embeddings yet)`);
+                return;
             }
+            // Group by dimension and compute averages
+            const dimensionValues = {};
+            for (const dimData of allDimensions) {
+                if (!dimensionValues[dimData.dimension.name]) {
+                    dimensionValues[dimData.dimension.name] = [];
+                }
+                dimensionValues[dimData.dimension.name].push(dimData.value);
+            }
+            // Build global prior as average across all dimensions
+            const prior = {
+                valence: 0.5,
+                arousal: 0.5,
+                tension: 0.5,
+                warmth: 0.5,
+                intimacy: 0.5,
+                density: 0.5,
+                groundedness: 0.5
+            };
+            for (const [dimensionName, values] of Object.entries(dimensionValues)) {
+                if (values.length > 0) {
+                    const average = values.reduce((a, b) => a + b, 0) / values.length;
+                    prior[dimensionName] = average;
+                }
+            }
+            this.globalPrior = prior;
+            this.globalPriorTimestamp = Date.now();
+            console.log(`[SIGNAL-FUSION] Global prior initialized from ${allDimensions.length} dimension records`);
         }
         catch (error) {
             console.error(`[SIGNAL-FUSION] Error initializing global prior:`, error.message);
@@ -457,3 +439,4 @@ class SignalFusionService {
 }
 // Export singleton instance
 exports.signalFusionService = new SignalFusionService();
+//# sourceMappingURL=signal-fusion.service.js.map

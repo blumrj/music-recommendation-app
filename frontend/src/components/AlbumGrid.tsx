@@ -41,7 +41,7 @@ export function AlbumGrid({
   }
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(60px, 1fr))`, gap, paddingBottom: "16px" }}>
+    <div className="grid" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(80px, 1fr))`, gap, paddingBottom: "16px" }}>
       {albums.map((album) => {
         const typedAlbum = album as Album & Partial<Recommendation>;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -16,6 +16,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.userController = exports.UserController = void 0;
 const users_service_1 = require("../modules/users/users.service");
 const survey_service_1 = require("../modules/surveys/survey.service");
+const logger_1 = require("../shared/logger");
 /**
  * User Controller
  *
@@ -63,18 +64,11 @@ class UserController {
                 needsOnboarding,
                 readyForAnalysis: surveyCount >= 5,
                 tasteProfile: profile ? {
-                    valence: profile.valence,
-                    arousal: profile.arousal,
-                    tension: profile.tension,
-                    warmth: profile.warmth,
-                    intimacy: profile.intimacy,
-                    density: profile.density,
-                    spaciousness: profile.spaciousness,
-                    organicSynthetic: profile.organicSynthetic,
-                    nostalgia: profile.nostalgia,
-                    groundedness: profile.groundedness,
-                    introspection: profile.introspection,
-                    movement: profile.movement,
+                    dimensions: profile.dimensions.map(d => ({
+                        name: d.dimension.name,
+                        label: d.dimension.label,
+                        value: d.value,
+                    })),
                     albumsAnalyzed: profile.albumsAnalyzed,
                 } : null,
             });
@@ -154,7 +148,7 @@ class UserController {
             res.json(profile);
         }
         catch (error) {
-            console.error("Error fetching taste profile:", error.message);
+            logger_1.logger.error("USERS", `Error fetching taste profile: ${error.message}`);
             res.status(500).json({
                 error: "Failed to fetch taste profile",
                 details: error.message
@@ -170,3 +164,4 @@ exports.UserController = UserController;
  * @type {UserController}
  */
 exports.userController = new UserController();
+//# sourceMappingURL=users.controller.js.map

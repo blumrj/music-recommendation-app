@@ -75,28 +75,50 @@ class SignalFusionService {
    */
   private async initializeGlobalPrior(): Promise<void> {
     try {
-      const albums = await prisma.albumEmotionalEmbedding.findMany({
-        select: {
-          valence: true,
-          arousal: true,
-          tension: true,
-          warmth: true,
-          intimacy: true,
-          density: true,
-          groundedness: true
-        },
-        take: 10000  // Limit to first 10k albums for performance
+      // Fetch all album intrinsic dimensions
+      const allDimensions = await prisma.albumIntrinsicProfileDimension.findMany({
+        include: { dimension: true }
       });
 
-      if (albums.length === 0) {
-        // No albums: use neutral prior
+      if (allDimensions.length === 0) {
+        // No albums with embeddings yet, use neutral
         this.globalPrior = this.getNeutralEmbedding();
-        console.log(`[SIGNAL-FUSION] Global prior: neutral (no albums in DB)`);
-      } else {
-        this.globalPrior = vectorMath.averageVectors(albums);
         this.globalPriorTimestamp = Date.now();
-        console.log(`[SIGNAL-FUSION] Global prior initialized (${albums.length} albums)`);
+        console.log(`[SIGNAL-FUSION] Global prior initialized (no albums with embeddings yet)`);
+        return;
       }
+
+      // Group by dimension and compute averages
+      const dimensionValues: { [key: string]: number[] } = {};
+
+      for (const dimData of allDimensions) {
+        if (!dimensionValues[dimData.dimension.name]) {
+          dimensionValues[dimData.dimension.name] = [];
+        }
+        dimensionValues[dimData.dimension.name].push(dimData.value);
+      }
+
+      // Build global prior as average across all dimensions
+      const prior: EmotionalVector = {
+        valence: 0.5,
+        arousal: 0.5,
+        tension: 0.5,
+        warmth: 0.5,
+        intimacy: 0.5,
+        density: 0.5,
+        groundedness: 0.5
+      };
+
+      for (const [dimensionName, values] of Object.entries(dimensionValues)) {
+        if (values.length > 0) {
+          const average = values.reduce((a, b) => a + b, 0) / values.length;
+          prior[dimensionName as keyof EmotionalVector] = average;
+        }
+      }
+
+      this.globalPrior = prior;
+      this.globalPriorTimestamp = Date.now();
+      console.log(`[SIGNAL-FUSION] Global prior initialized from ${allDimensions.length} dimension records`);
     } catch (error: any) {
       console.error(`[SIGNAL-FUSION] Error initializing global prior:`, error.message);
       this.globalPrior = this.getNeutralEmbedding();

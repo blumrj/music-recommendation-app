@@ -154,3 +154,4 @@ class FastTextEmbeddingService {
 }
 // Export singleton instance
 exports.fastTextService = FastTextEmbeddingService.getInstance();
+//# sourceMappingURL=fasttext-embedding.service.js.map

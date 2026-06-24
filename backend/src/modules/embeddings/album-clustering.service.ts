@@ -125,8 +125,6 @@ class AlbumClusteringService {
       try {
         // Get embedding from Last.fm tags (no Spotify audio features needed)
         const embedding = await albumEmbeddingService.getOrComputeEmbedding(
-          album.spotifyAlbumId,
-          {},  // No audio features needed
           { albumName: album.albumName, artist: album.artist }
         );
 

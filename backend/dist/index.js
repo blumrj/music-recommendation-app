@@ -32,6 +32,8 @@ const users_routes_1 = __importDefault(require("./routes/users.routes"));
 const recommendation_routes_1 = __importDefault(require("./routes/recommendation.routes"));
 const auth_routes_1 = require("./routes/auth.routes");
 const config_routes_1 = require("./routes/config.routes");
+const weather_routes_1 = __importDefault(require("./routes/weather.routes"));
+const dimension_seeder_1 = require("./config/dimension-seeder");
 /**
  * Load environment variables from .env file
  * Required variables: PORT, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, etc.
@@ -67,12 +69,14 @@ app.use(express_1.default.json());
  * - albumRoutes: Favorites, surveys
  * - authRoutes: Spotify OAuth, token management
  * - recommendationRoutes: Weather-based recommendations
+ * - weatherRoutes: Weather data for locations
  * - configRouter: Application configuration endpoints
  */
 app.use("/api/users", users_routes_1.default);
 app.use("/api/albums", albums_routes_1.default);
 app.use("/api/auth", auth_routes_1.authRoutes);
 app.use("/api", recommendation_routes_1.default);
+app.use("/api/weather", weather_routes_1.default);
 app.use("/api/config", config_routes_1.configRouter);
 /**
  * Health check endpoint
@@ -115,7 +119,16 @@ app.use((req, res) => {
  * Listens on configured PORT for incoming HTTP requests
  * Logs startup message with health check URL for manual testing
  */
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`\n✅ Server running on http://localhost:${PORT}`);
     console.log(`Test it: curl http://localhost:${PORT}/api/health\n`);
+    // Seed dimensions on startup
+    try {
+        await (0, dimension_seeder_1.seedDimensions)();
+    }
+    catch (error) {
+        console.error('Failed to seed dimensions:', error);
+        process.exit(1);
+    }
 });
+//# sourceMappingURL=index.js.map

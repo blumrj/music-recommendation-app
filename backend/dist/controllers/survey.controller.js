@@ -25,6 +25,7 @@ exports.surveyController = void 0;
 const client_1 = require("@prisma/client");
 const survey_service_1 = require("../modules/surveys/survey.service");
 const users_service_1 = require("../modules/users/users.service");
+const logger_1 = require("../shared/logger");
 const prisma = new client_1.PrismaClient();
 /**
  * Survey Controller
@@ -54,11 +55,9 @@ class SurveyController {
      * @param {string} req.body.imageUrl - Album cover URL (optional)
      *
      * PHASE 1 FORMAT (Preferred):
-     * @param {number} req.body.intimacy_response - 0-100, where 0=intimate, 100=distant
      * @param {number} req.body.warmth_response - 0-100, where 0=warm, 100=cold
      * @param {number} req.body.groundedness_response - 0-100, where 0=grounded, 100=dreamy
      * @param {number} req.body.arousal_response - 0-100, where 0=calm, 100=energized
-     * @param {number} req.body.introspection_response - 0-100, where 0=reflective, 100=external
      * @param {number} req.body.density_response - 0-100, where 0=dense, 100=sparse
      *
      * PHASE 0 FORMAT (Backward compatibility):
@@ -88,11 +87,9 @@ class SurveyController {
      *   albumName: "Album Title",
      *   artist: "Artist Name",
      *   imageUrl: "url...",
-     *   intimacy_response: 35,
      *   warmth_response: 72,
      *   groundedness_response: 45,
      *   arousal_response: 60,
-     *   introspection_response: 55,
      *   density_response: 48
      * }
      *
@@ -117,6 +114,10 @@ class SurveyController {
             const userId = req.userId;
             // Extract Spotify album ID from URL param
             const { spotifyId } = req.params;
+            // Log incoming request body
+            logger_1.logger.info("SURVEY-CONTROLLER", `Received survey for album: ${req.body.albumName}`);
+            logger_1.logger.info("SURVEY-CONTROLLER", `  - Body keys: ${Object.keys(req.body).join(', ')}`);
+            logger_1.logger.info("SURVEY-CONTROLLER", `  - imageUrl in body: ${req.body.imageUrl ? `✓ (${req.body.imageUrl.substring(0, 50)}...)` : '❌ MISSING'}`);
             // Extract survey answers from request body
             const { albumName, artist, imageUrl, 
             // Old Phase 0 format (optional, for backward compatibility)
@@ -195,7 +196,7 @@ class SurveyController {
             });
         }
         catch (error) {
-            console.error("Error saving survey:", error.message);
+            logger_1.logger.error("SURVEY", `Error saving survey: ${error.message}`);
             res.status(500).json({
                 error: "Failed to save survey",
                 details: error.message
@@ -250,11 +251,11 @@ class SurveyController {
                 where: { id: userId },
                 select: { spotifyToken: true }
             });
-            console.log(`[SURVEY] analyzeTaste called for user ${userId}`);
-            console.log(`[SURVEY] User has spotifyToken:`, !!user?.spotifyToken);
+            logger_1.logger.info("SURVEY", `analyzeTaste called for user ${userId}`);
+            logger_1.logger.info("SURVEY", `User has spotifyToken: ${!!user?.spotifyToken}`);
             if (user?.spotifyToken) {
-                console.log(`[SURVEY] Token preview:`, user.spotifyToken.substring(0, 20) + '...');
-                console.log(`[SURVEY] Token length:`, user.spotifyToken.length);
+                logger_1.logger.info("SURVEY", `Token preview: ${user.spotifyToken.substring(0, 20)}...`);
+                logger_1.logger.info("SURVEY", `Token length: ${user.spotifyToken.length}`);
             }
             if (!user?.spotifyToken) {
                 return res.status(400).json({
@@ -305,7 +306,7 @@ class SurveyController {
             });
         }
         catch (error) {
-            console.error("Error analyzing taste:", error.message);
+            logger_1.logger.error("SURVEY", `Error analyzing taste: ${error.message}`);
             res.status(500).json({
                 error: "Failed to analyze taste profile",
                 details: error.message
@@ -424,3 +425,4 @@ class SurveyController {
     }
 }
 exports.surveyController = new SurveyController();
+//# sourceMappingURL=survey.controller.js.map

@@ -169,7 +169,7 @@ function euclideanDistance(a, b) {
 function addVectors(base, delta) {
     const result = { ...base };
     Object.keys(delta).forEach((dim) => {
-        if (dim in exports.EMOTIONAL_DIMENSIONS && delta[dim] !== undefined) {
+        if (exports.EMOTIONAL_DIMENSIONS.includes(dim) && delta[dim] !== undefined) {
             result[dim] = Math.max(0, Math.min(1, ((result[dim] ?? 0.5) + (delta[dim] ?? 0))));
         }
     });
@@ -447,3 +447,4 @@ function sharpenContrast(embedding, strength = 1.8) {
     }
     return normalizeVector(sharpened);
 }
+//# sourceMappingURL=vector.js.map

@@ -286,3 +286,4 @@ function averagePooling(similarities) {
         return 0;
     return similarities.reduce((a, b) => a + b, 0) / similarities.length;
 }
+//# sourceMappingURL=similarity.js.map

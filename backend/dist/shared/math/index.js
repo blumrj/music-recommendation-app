@@ -88,3 +88,4 @@ Object.defineProperty(exports, "averagePooling", { enumerable: true, get: functi
 exports.VectorMath = __importStar(require("./vector"));
 exports.Normalization = __importStar(require("./normalization"));
 exports.Similarity = __importStar(require("./similarity"));
+//# sourceMappingURL=index.js.map

@@ -69,3 +69,4 @@ Object.defineProperty(exports, "dimensionSimilarities", { enumerable: true, get:
 Object.defineProperty(exports, "harmonicMean", { enumerable: true, get: function () { return similarity_1.harmonicMean; } });
 Object.defineProperty(exports, "maxPooling", { enumerable: true, get: function () { return similarity_1.maxPooling; } });
 Object.defineProperty(exports, "averagePooling", { enumerable: true, get: function () { return similarity_1.averagePooling; } });
+//# sourceMappingURL=vector-math.js.map

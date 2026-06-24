@@ -54,3 +54,4 @@ function createWeatherClient() {
     });
     return client;
 }
+//# sourceMappingURL=weather-client.js.map

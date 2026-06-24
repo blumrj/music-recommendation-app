@@ -28,49 +28,49 @@ export interface EmotionalDimension {
 export const EMOTIONAL_DIMENSIONS: Record<string, EmotionalDimension> = {
   valence: {
     name: "valence",
-    description: "Sad, melancholic, gloomy (0) vs uplifting, joyful, positive (1)",
+    description: "Does this album sit with you in the dark, or lift your spirits?",
     label: "Positivity",
     leftLabel: "Sad",
     rightLabel: "Happy"
   },
   arousal: {
     name: "arousal",
-    description: "Calm, soothing, relaxing (0) vs energetic, stimulating, exciting (1)",
+    description: "Does it make you want to move, or help you slow down and breathe?",
     label: "Energy",
     leftLabel: "Calm",
     rightLabel: "Energized"
   },
   tension: {
     name: "tension",
-    description: "Relaxed, resolved, consonant (0) vs tense, dissonant, unsettling (1)",
+    description: "Does it sit comfortably, or keep you slightly on edge?",
     label: "Tension",
     leftLabel: "Relaxed",
     rightLabel: "Tense"
   },
   warmth: {
     name: "warmth",
-    description: "Cold, distant, harsh (0) vs warm, intimate, cozy (1)",
+    description: "Is it cool and distant, or warm and comforting?",
     label: "Warmth",
-    leftLabel: "Cold",
-    rightLabel: "Warm"
+    leftLabel: "Cool",
+    rightLabel: "Comforting"
   },
   intimacy: {
     name: "intimacy",
-    description: "Distant, external, public (0) vs personal, introspective, vulnerable (1)",
+    description: "Does it feel distant, or deeply personal?",
     label: "Intimacy",
     leftLabel: "Distant",
     rightLabel: "Personal"
   },
   density: {
     name: "density",
-    description: "Minimal, sparse, simple (0) vs layered, rich, complex (1)",
+    description: "Is it stripped back and bare, or layered with sound on sound?",
     label: "Density",
     leftLabel: "Sparse",
     rightLabel: "Rich"
   },
   groundedness: {
     name: "groundedness",
-    description: "Dreamy, ethereal, escapist (0) vs grounded, earthy, rooted (1)",
+    description: "Does it feel rooted in the real world, or like floating away?",
     label: "Groundedness",
     leftLabel: "Dreamy",
     rightLabel: "Grounded"

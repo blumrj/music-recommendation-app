@@ -24,6 +24,7 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { surveyService } from "../modules/surveys/survey.service";
 import { userService } from "../modules/users/users.service";
+import { logger } from "../shared/logger";
 
 const prisma = new PrismaClient();
 
@@ -115,6 +116,11 @@ class SurveyController {
       
       // Extract Spotify album ID from URL param
       const { spotifyId } = req.params;
+      
+      // Log incoming request body
+      logger.info("SURVEY-CONTROLLER", `Received survey for album: ${req.body.albumName}`);
+      logger.info("SURVEY-CONTROLLER", `  - Body keys: ${Object.keys(req.body).join(', ')}`);
+      logger.info("SURVEY-CONTROLLER", `  - imageUrl in body: ${req.body.imageUrl ? `✓ (${req.body.imageUrl.substring(0, 50)}...)` : '❌ MISSING'}`);
       
       // Extract survey answers from request body
       const {
@@ -216,7 +222,7 @@ class SurveyController {
         readyForAnalysis: totalSurveys >= 5  // Can analyze taste if 5+ surveys
       });
     } catch (error: any) {
-      console.error("Error saving survey:", error.message);
+      logger.error("SURVEY", `Error saving survey: ${error.message}`);
       res.status(500).json({
         error: "Failed to save survey",
         details: error.message
@@ -274,11 +280,11 @@ class SurveyController {
         select: { spotifyToken: true }
       });
 
-      console.log(`[SURVEY] analyzeTaste called for user ${userId}`);
-      console.log(`[SURVEY] User has spotifyToken:`, !!user?.spotifyToken);
+      logger.info("SURVEY", `analyzeTaste called for user ${userId}`);
+      logger.info("SURVEY", `User has spotifyToken: ${!!user?.spotifyToken}`);
       if (user?.spotifyToken) {
-        console.log(`[SURVEY] Token preview:`, user.spotifyToken.substring(0, 20) + '...');
-        console.log(`[SURVEY] Token length:`, user.spotifyToken.length);
+        logger.info("SURVEY", `Token preview: ${user.spotifyToken.substring(0, 20)}...`);
+        logger.info("SURVEY", `Token length: ${user.spotifyToken.length}`);
       }
 
       if (!user?.spotifyToken) {
@@ -336,7 +342,7 @@ class SurveyController {
         }
       });
     } catch (error: any) {
-      console.error("Error analyzing taste:", error.message);
+      logger.error("SURVEY", `Error analyzing taste: ${error.message}`);
       res.status(500).json({
         error: "Failed to analyze taste profile",
         details: error.message

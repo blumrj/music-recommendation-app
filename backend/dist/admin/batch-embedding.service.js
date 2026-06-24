@@ -10,10 +10,9 @@
  * - Enables analytics: which dimensions matter? which embeddings changed?
  *
  * ARCHITECTURE:
- * Queries albums from three sources:
+ * Queries albums from two sources:
  * 1. Album table (saved albums)
  * 2. AlbumSurvey table (surveyed albums)
- * 3. Favorite table (favorited albums)
  *
  * For each album:
  * - Fetch/use default audio features
@@ -34,6 +33,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.batchEmbeddingService = void 0;
 const client_1 = require("@prisma/client");
 const album_embedding_orchestrator_1 = require("../modules/embeddings/album-embedding.orchestrator");
+const logger_1 = require("../shared/logger");
 const prisma = new client_1.PrismaClient();
 /**
  * Batch Embedding Service
@@ -49,7 +49,6 @@ class BatchEmbeddingService {
      * Queries all unique albums from:
      * - Album table (user-saved albums)
      * - AlbumSurvey table (surveyed albums)
-     * - Favorite table (favorited albums)
      *
      * De-duplicates by Spotify album ID, then computes/caches embeddings.
      *
@@ -80,7 +79,7 @@ class BatchEmbeddingService {
      * }
      */
     async batchEmbedAllAlbums() {
-        console.log("[BATCH] Starting batch embedding for all albums...");
+        logger_1.logger.info("BATCH", "Starting batch embedding for all albums...");
         const stats = {
             processed: 0,
             created: 0,
@@ -90,17 +89,17 @@ class BatchEmbeddingService {
         };
         try {
             // STEP 1: Fetch all unique albums from database
-            console.log("[BATCH] Fetching all albums from database...");
+            logger_1.logger.info("BATCH", "Fetching all albums from database...");
             const albums = await this.fetchAllAlbums();
-            console.log(`[BATCH] Found ${albums.length} unique albums`);
+            logger_1.logger.info("BATCH", `Found ${albums.length} unique albums`);
             // STEP 2: For each album, compute/cache embedding
-            console.log("[BATCH] Processing albums...");
+            logger_1.logger.info("BATCH", "Processing albums...");
             for (let i = 0; i < albums.length; i++) {
                 const album = albums[i];
                 const progress = `[${i + 1}/${albums.length}]`;
                 try {
-                    // Get or compute embedding
-                    const embedding = await album_embedding_orchestrator_1.albumEmbeddingService.getOrComputeEmbedding(album.spotifyId, this.getDefaultAudioFeatures(), {
+                    // Get or compute embedding from Last.fm tags
+                    const embedding = await album_embedding_orchestrator_1.albumEmbeddingService.getOrComputeEmbedding(album.spotifyId, {
                         albumName: album.name,
                         artist: album.artist,
                         imageUrl: album.imageUrl
@@ -108,11 +107,11 @@ class BatchEmbeddingService {
                     // Track whether it was cached or newly created
                     if (embedding.createdAt && embedding.updatedAt === embedding.createdAt) {
                         stats.created++;
-                        console.log(`${progress} ✓ Created: ${album.name}`);
+                        logger_1.logger.info("BATCH", `${progress} ✓ Created: ${album.name}`);
                     }
                     else {
                         stats.cached++;
-                        console.log(`${progress} ○ Cached: ${album.name}`);
+                        logger_1.logger.info("BATCH", `${progress} ○ Cached: ${album.name}`);
                     }
                     stats.processed++;
                 }
@@ -120,37 +119,36 @@ class BatchEmbeddingService {
                     stats.failed++;
                     const errorMsg = `Failed to embed ${album.name}: ${error.message}`;
                     stats.errors.push(errorMsg);
-                    console.warn(`${progress} ✗ ${errorMsg}`);
+                    logger_1.logger.warn("BATCH", `${progress} ✗ ${errorMsg}`);
                 }
             }
             // STEP 3: Summary
-            console.log("[BATCH] ─────────────────────────────────────────");
-            console.log(`[BATCH] Batch complete:`);
-            console.log(`[BATCH]   Processed: ${stats.processed}`);
-            console.log(`[BATCH]   Created:   ${stats.created}`);
-            console.log(`[BATCH]   Cached:    ${stats.cached}`);
-            console.log(`[BATCH]   Failed:    ${stats.failed}`);
+            logger_1.logger.info("BATCH", "─────────────────────────────────────────");
+            logger_1.logger.info("BATCH", `Batch complete:`);
+            logger_1.logger.info("BATCH", `  Processed: ${stats.processed}`);
+            logger_1.logger.info("BATCH", `  Created:   ${stats.created}`);
+            logger_1.logger.info("BATCH", `  Cached:    ${stats.cached}`);
+            logger_1.logger.info("BATCH", `  Failed:    ${stats.failed}`);
             if (stats.errors.length > 0) {
-                console.log(`[BATCH] Errors:`);
-                stats.errors.forEach(err => console.log(`[BATCH]   - ${err}`));
+                logger_1.logger.info("BATCH", `Errors:`);
+                stats.errors.forEach(err => logger_1.logger.info("BATCH", `  - ${err}`));
             }
-            console.log("[BATCH] ─────────────────────────────────────────");
+            logger_1.logger.info("BATCH", "─────────────────────────────────────────");
             return stats;
         }
         catch (error) {
             const msg = `Batch embedding failed: ${error.message}`;
             stats.errors.push(msg);
-            console.error(`[BATCH] CRITICAL ERROR: ${msg}`);
+            logger_1.logger.error("BATCH", `CRITICAL ERROR: ${msg}`);
             throw error;
         }
     }
     /**
      * Fetch all unique albums from database
      *
-     * Queries three sources and de-duplicates:
+     * Queries two sources and de-duplicates:
      * - Album table (user-saved albums)
      * - AlbumSurvey table (surveyed albums)
-     * - Favorite table (favorited albums)
      *
      * @private
      * @async
@@ -176,90 +174,49 @@ class BatchEmbeddingService {
                     });
                 }
             }
-            console.log(`[BATCH] Found ${savedAlbums.length} from Album table`);
+            logger_1.logger.info("BATCH", `Found ${savedAlbums.length} from Album table`);
         }
         catch (error) {
-            console.warn(`[BATCH] Failed to fetch from Album table:`, error.message);
+            logger_1.logger.warn("BATCH", `Failed to fetch from Album table: ${error.message}`);
         }
         // SOURCE 2: AlbumSurvey table (surveyed albums)
         try {
             const surveyed = await prisma.albumSurvey.findMany({
                 select: {
-                    spotifyAlbumId: true,
-                    albumName: true,
-                    artist: true,
-                    imageUrl: true
+                    albumId: true,
+                    album: {
+                        select: {
+                            spotifyId: true,
+                            title: true,
+                            artist: true,
+                            imageUrl: true
+                        }
+                    }
                 }
             });
-            for (const album of surveyed) {
-                if (album.spotifyAlbumId && !seen.has(album.spotifyAlbumId)) {
-                    seen.add(album.spotifyAlbumId);
+            for (const survey of surveyed) {
+                if (survey.album.spotifyId && !seen.has(survey.album.spotifyId)) {
+                    seen.add(survey.album.spotifyId);
                     albums.push({
-                        spotifyId: album.spotifyAlbumId,
-                        name: album.albumName,
-                        artist: album.artist,
-                        imageUrl: album.imageUrl || undefined
+                        spotifyId: survey.album.spotifyId,
+                        name: survey.album.title,
+                        artist: survey.album.artist,
+                        imageUrl: survey.album.imageUrl || undefined
                     });
                 }
             }
-            console.log(`[BATCH] Found ${surveyed.length} from AlbumSurvey table`);
+            logger_1.logger.info("BATCH", `Found ${surveyed.length} from AlbumSurvey table`);
         }
         catch (error) {
-            console.warn(`[BATCH] Failed to fetch from AlbumSurvey table:`, error.message);
+            logger_1.logger.warn("BATCH", `Failed to fetch from AlbumSurvey table: ${error.message}`);
         }
-        // SOURCE 3: Favorite table (favorited albums)
-        try {
-            const favorites = await prisma.favorite.findMany({
-                select: {
-                    albumSpotifyId: true,
-                    albumName: true,
-                    artist: true,
-                    imageUrl: true
-                }
-            });
-            for (const album of favorites) {
-                if (album.albumSpotifyId && !seen.has(album.albumSpotifyId)) {
-                    seen.add(album.albumSpotifyId);
-                    albums.push({
-                        spotifyId: album.albumSpotifyId,
-                        name: album.albumName,
-                        artist: album.artist,
-                        imageUrl: album.imageUrl || undefined
-                    });
-                }
-            }
-            console.log(`[BATCH] Found ${favorites.length} from Favorite table`);
-        }
-        catch (error) {
-            console.warn(`[BATCH] Failed to fetch from Favorite table:`, error.message);
-        }
-        console.log(`[BATCH] Total unique albums: ${albums.length}`);
+        logger_1.logger.info("BATCH", `Total unique albums: ${albums.length}`);
         return albums;
     }
     /**
      * Get default audio features (used when actual features unavailable)
      *
      * Represents "average" track - neutral starting point for embedding.
-     * Used because Spotify audio-features endpoint is deprecated.
-     *
-     * @private
-     * @returns {Record<string, number>} Default audio features
-     */
-    getDefaultAudioFeatures() {
-        return {
-            danceability: 0.5,
-            energy: 0.5,
-            loudness: -5,
-            speechiness: 0,
-            acousticness: 0.5,
-            instrumentalness: 0,
-            liveness: 0,
-            valence: 0.5,
-            tempo: 120,
-            mode: 1,
-            key: 0
-        };
-    }
     /**
      * Batch embed albums with progress reporting
      *
@@ -288,7 +245,7 @@ class BatchEmbeddingService {
         for (let i = 0; i < total; i++) {
             const album = albums[i];
             try {
-                const embedding = await album_embedding_orchestrator_1.albumEmbeddingService.getOrComputeEmbedding(album.spotifyId, this.getDefaultAudioFeatures(), {
+                const embedding = await album_embedding_orchestrator_1.albumEmbeddingService.getOrComputeEmbedding(album.spotifyId, {
                     albumName: album.name,
                     artist: album.artist,
                     imageUrl: album.imageUrl
@@ -314,3 +271,4 @@ class BatchEmbeddingService {
     }
 }
 exports.batchEmbeddingService = new BatchEmbeddingService();
+//# sourceMappingURL=batch-embedding.service.js.map

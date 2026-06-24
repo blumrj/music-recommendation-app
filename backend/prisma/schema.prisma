@@ -25,20 +25,45 @@ model User {
   recommendations      Recommendation[]
   tasteProfile         UserTasteProfile?
   recommendationFeedback RecommendationFeedback[]
+  
+  perceptionDimensions UserAlbumPerceptionDimension[]
 }
 
 model Album {
   id        String   @id @default(uuid())
-  spotifyId String   @unique
+
   title     String
   artist    String
   imageUrl  String?
-  spotifyUrl String?
 
-  recommendations        Recommendation[]
-  albumSurveys          AlbumSurvey[]
-  emotionalEmbedding    AlbumEmotionalEmbedding?
+  // ─────────────────────────────────────────────────────────────────────
+  // METADATA & CATALOG DISCOVERY
+  // lastFmTags: Persisted Last.fm tag extraction result
+  // embeddingSource: Marks how embedding was derived
+  // ─────────────────────────────────────────────────────────────────────
+  lastFmTags        Json?                    // Persisted tags from Last.fm (tag name + count)
+  
+  embeddingDerivedFrom     String? @default("lastfmTags")  // lastfmTags|audio|clap
+  embeddingConfidence      Float? @default(0.5)
+  embeddingSourceMetadata  Json?  // { tagCount, topTags[], confidence, timestamp }
+  enrichmentStatus         String? @default("pending")     // pending|enriched|embedded
+  
+  // ─────────────────────────────────────────────────────────────────────
+  // LIFECYCLE TRACKING (for worker orchestration)
+  // ─────────────────────────────────────────────────────────────────────
+  lastDiscoveredAt   DateTime?  // When this album was last discovered by workers
+  embeddingComputedAt DateTime? // When embedding was last computed
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  externalIds        AlbumExternalId[]
+  recommendations    Recommendation[]
+  albumSurveys       AlbumSurvey[]
   recommendationFeedback RecommendationFeedback[]
+  userAlbumPerceptions   UserAlbumPerceptionDimension[]
+  intrinsicProfileDimensions AlbumIntrinsicProfileDimension[]
 }
 
 model Recommendation {
@@ -58,131 +83,92 @@ model Recommendation {
 }
 
 model AlbumSurvey {
-  id               String   @id @default(cuid())
-  userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String @id @default(cuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  albumId          String
-  album            Album    @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  albumId   String
+  album     Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
   
-  // PHASE 1: Experiential survey responses (0-100 scale, 7D dimensions)
-  valence_response        Int?              // 0=Sad, 100=Happy/Uplifting
-  arousal_response        Int?              // 0=Calm, 100=Energized
-  tension_response        Int?              // 0=Relaxed, 100=Tense
-  warmth_response         Int?              // 0=Cold, 100=Warm
-  intimacy_response       Int?              // 0=Distant, 100=Personal
-  density_response        Int?              // 0=Sparse, 100=Rich/Layered
-  groundedness_response   Int?              // 0=Dreamy, 100=Grounded
-  
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, albumId])
   @@index([userId])
   @@index([albumId])
 }
 
-model UserTasteProfile {
-  id                String   @id @default(cuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Dimension {
+  id          String @id @default(cuid())
+  name        String @unique
+  label       String
+  description String
+  leftLabel   String
+  rightLabel  String
   
-  valence           Float    @default(0.5)    // happy ↔ sad/melancholic
-  arousal           Float    @default(0.5)    // calm ↔ energetic/intense
-  tension           Float    @default(0.5)    // resolved/peaceful ↔ unresolved/tense
-  warmth            Float    @default(0.5)    // cold/distant ↔ warm/intimate
-  intimacy          Float    @default(0.5)    // exposed ↔ personal/private
-  density           Float    @default(0.5)    // sparse/minimal ↔ rich/full
-  groundedness      Float    @default(0.5)    // escapist ↔ grounded/real
-  
-  // ─────────────────────────────────────────────────────────────────────
-  // PERCEPTION BIAS LAYER (7D - how user emotionally reinterprets albums)
-  // 
-  // Represents: surveyResponse - intrinsicEmbedding
-  // 
-  // These capture the user's unique emotional interpretation patterns.
-  // They should NOT override intrinsic embeddings, but gently shift them.
-  // 
-  // Example:
-  // - Album has intrinsic warmth = 0.2 (cold)
-  // - User perceives warmth = 0.8 (warm)
-  // - Bias = +0.6 (user adds warmth to cold albums)
-  // - Interpretation: "This user emotionally interprets even cold music as warmer"
-  // ─────────────────────────────────────────────────────────────────────
-  bias_valence      Float    @default(0.0)    // User's valence interpretation offset
-  bias_arousal      Float    @default(0.0)    // User's arousal interpretation offset
-  bias_tension      Float    @default(0.0)    // User's tension interpretation offset
-  bias_warmth       Float    @default(0.0)    // User's warmth interpretation offset
-  bias_intimacy     Float    @default(0.0)    // User's intimacy interpretation offset
-  bias_density      Float    @default(0.0)    // User's density interpretation offset
-  bias_groundedness Float    @default(0.0)    // User's groundedness interpretation offset
-  
-  albumsAnalyzed    Int      @default(0)   // How many albums went into this profile
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  userAlbumPerceptions UserAlbumPerceptionDimension[]
+  albumProfiles AlbumIntrinsicProfileDimension[]
+  userProfiles UserTasteProfileDimension[]
 }
 
-// ═════════════════════════════════════════════════════════════════════════
-// ALBUM EMOTIONAL EMBEDDING
-// 
-// Represents the intrinsic emotional properties of an album.
-// Not user-specific - this is the general emotional profile learned from
-// audio features, collaborative signals, and (optionally) aggregate survey data.
-// 
-// Used to:
-// - Find emotionally similar albums in 13D space
-// - Build user embeddings from surveyed albums
-// - Compute contextual recommendations
-// ═════════════════════════════════════════════════════════════════════════
-model AlbumEmotionalEmbedding {
-  id                  String   @id @default(cuid())
+model UserAlbumPerceptionDimension {
+  id          String @id @default(cuid())
   
-  albumId             String   @unique
-  album               Album    @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // ─────────────────────────────────────────────────────────────────────
-  // 13D INTRINSIC EMOTIONAL EMBEDDING (0-1 scale)
-  // These represent general emotional properties of the album.
-  // Derived from audio features + optional survey aggregation.
-  // ─────────────────────────────────────────────────────────────────────
+  albumId     String
+  album       Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
   
-  // Psychological Core (VAD-based)
-  valence             Float                   // happy ↔ sad
-  arousal             Float                   // calm ↔ energetic
-  tension             Float                   // peaceful ↔ tense
+  dimensionId String
+  dimension   Dimension @relation(fields: [dimensionId], references: [id])
   
-  // Atmospheric (music-specific)
-  warmth              Float                   // cold ↔ warm
-  intimacy            Float                   // exposed ↔ intimate
-  density             Float                   // sparse ↔ rich
-  groundedness        Float                   // escapist ↔ grounded
+  value       Int  // 0-100
   
-  // ─────────────────────────────────────────────────────────────────────
-  // METADATA & QUALITY
-  // ─────────────────────────────────────────────────────────────────────
+  @@unique([userId, albumId, dimensionId])
+}
+
+model UserTasteProfile {
+  id             String @id @default(cuid())
+  userId         String @unique
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // How this embedding was derived
-  derivedFrom         String   @default("audioFeatures")  // "audioFeatures" | "surveys" | "collaborative" | "hybrid"
+  albumsAnalyzed Int @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
   
-  // Confidence in this embedding (0-1)
-  // High: well-known albums with lots of data
-  // Low: niche albums, few listeners
-  confidence          Float    @default(0.5)
+  dimensions UserTasteProfileDimension[]
+}
+
+model UserTasteProfileDimension {
+  id          String @id @default(cuid())
   
-  // ─────────────────────────────────────────────────────────────────────
-  // LAST.FM SEMANTIC ENRICHMENT
-  // Stores community tag data used to influence the embedding.
-  // Tags are fetched once per album and blended into the 13D embedding.
-  // ─────────────────────────────────────────────────────────────────────
+  userProfileId String
+  userProfile   UserTasteProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
   
-  tags                Json?                // Array of { tag: string, count: number }
-  enrichmentStatus    String?  @default("pending")  // "enriched" | "pending" | "failed-lastfm" | "audio-only"
+  dimensionId String
+  dimension   Dimension @relation(fields: [dimensionId], references: [id])
   
-  // Timestamps
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  value       Float  // 0-1 (final merged value, no bias)
   
-  @@index([albumId])
+  @@unique([userProfileId, dimensionId])
+}
+
+model AlbumIntrinsicProfileDimension {
+  id          String @id @default(cuid())
+  
+  albumId     String
+  album       Album @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  
+  dimensionId String
+  dimension   Dimension @relation(fields: [dimensionId], references: [id])
+  
+  value       Float  // 0-1
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([albumId, dimensionId])
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -227,5 +213,84 @@ model RecommendationFeedback {
   @@index([userId, recommendationId])
   @@index([userId, createdAt])
   @@index([albumId])
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CATALOG DECOUPLING - NEW MODELS (PHASE 1 REFACTOR)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// AlbumExternalId: Track same album across multiple providers (Spotify, Last.fm, etc.)
+// Supports future migration to other sources without breaking album identity
+model AlbumExternalId {
+  id                String   @id @default(cuid())
+  
+  albumId           String
+  album             Album    @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  
+  provider          String   // spotify|lastfm|musicbrainz|clap
+  externalId        String   // Provider's ID for this album
+  providerMetadata  Json?    // Additional metadata from provider (e.g., Spotify URI, Last.fm URL)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@unique([albumId, provider])
+  @@index([provider, externalId])
+  @@index([albumId])
+}
+
+// ProcessingJob: Track background worker job executions
+// Used by catalog discovery/enrichment/embedding workers (Phase 2)
+// Provides job history for debugging and retry logic
+model ProcessingJob {
+  id              String   @id @default(cuid())
+  
+  jobType         String   // discover|enrich|embed|refresh_catalog
+  status          String   // pending|running|completed|failed|retrying
+  
+  // Job metadata
+  batchId         String?  // For grouping related jobs (e.g., nightly run)
+  targetCount     Int?     // Expected items to process
+  processedCount  Int?     // Items actually processed
+  
+  // Results & errors
+  result          Json?    // Job-specific result data
+  errorMessage    String?  // Error details if failed
+  errorStack      String?  // Full stack trace if failed
+  
+  // Retry tracking
+  attemptNumber   Int @default(1)
+  maxAttempts     Int @default(3)
+  
+  // Lifecycle
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([jobType, status])
+  @@index([jobType, createdAt])
+  @@index([batchId])
+  @@index([status])
+}
+
+// LastFmProfile: Cache artist-level Last.fm embeddings (optional, for performance)
+// Reduces repeated Last.fm API calls for artist embeddings
+// TTL: 48h refresh
+model LastFmProfile {
+  id              String   @id @default(cuid())
+  
+  artistName      String @unique
+  
+  embedding       Float[]  // 7D vector (stored as array in JSON/BYTEA depending on DB)
+  
+  tagSources      Int?     // Number of albums used to compute this embedding
+  confidence      Float?   // Confidence score [0, 1]
+  
+  lastUpdatedAt   DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([artistName])
 }
 

@@ -207,13 +207,18 @@ The architecture protects you from changes:
 ## Common Development Tasks
 
 ### Environment Setup
-1. Copy `.env.example` to `.env` in both `backend/` and `frontend/`
-2. Fill in API keys:
+1. **Copy `.env.example` files to `.env`** (creates `.env` files with all required variables):
+   ```bash
+   cd backend && cp .env.example .env
+   cd ../frontend && cp .env.example .env.local
+   ```
+2. **Fill in API keys** in `backend/.env`:
    - Spotify: https://developer.spotify.com/dashboard
-   - OpenWeatherMap: https://openweathermap.org/api
-   - Last.fm: https://www.last.fm/api/account/create
-3. Start Docker: `docker-compose up -d` (in `backend/`)
-4. Run migrations: `npx prisma migrate dev` (in `backend/`)
+   - OpenWeatherMap: https://openweathermap.org/api (free tier: 1000 calls/day)
+   - Last.fm: https://www.last.fm/api/account/create (optional for now)
+3. **JWT Secrets**: Use strong random strings (min 32 chars each)
+4. **Start Docker**: `docker-compose up -d` (in `backend/`)
+5. **Run migrations**: `npx prisma migrate dev` (in `backend/`)
 
 ### Running the Full Stack
 ```bash
@@ -243,7 +248,161 @@ npx prisma migrate dev --name describe_change
 
 ---
 
-## When Making Changes
+## Troubleshooting Common Issues
+
+For comprehensive troubleshooting, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md). Quick reference for most common issues:
+
+### "Port 3000 already in use"
+```bash
+lsof -i :3000 && kill -9 <PID>  # macOS/Linux
+netstat -ano | findstr :3000 && taskkill /PID <PID> /F  # Windows
+```
+
+### Database connection error
+```bash
+docker-compose up -d  # Start PostgreSQL
+npx prisma migrate reset --force  # Reset if schema mismatch
+```
+
+### Missing `.env` file
+```bash
+cd backend && cp .env.example .env  # Fill in API keys
+cd ../frontend && cp .env.example .env.local
+```
+
+### Authentication errors (401/403)
+- Check JWT token in localStorage: `localStorage.getItem('token')`
+- Verify `JWT_SECRET` in `.env` is correct
+- If stuck, clear: `localStorage.clear()` and log in again
+
+### "Recommendations endpoint returns empty"
+- User must complete surveys first (need taste profile)
+- Verify geolocation is working: `navigator.geolocation.getCurrentPosition()`
+- Check Spotify API key is valid in backend logs
+- Verify weather API is accessible
+
+For more detailed solutions, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+---
+
+## Known Issues & Limitations
+
+### 13D Emotional Dimension Redundancy
+**Status**: ⚠️ Known limitation affecting recommendation diversity
+
+The recommendation algorithm uses a 13-dimensional emotional embedding space, but several dimensions are semantically overlapping:
+
+**Overlapping pairs**:
+- `arousal` ↔ `movement` (both measure "energy level") - ~70-80% correlated
+- `tension` ↔ `arousal` (both measure "activation") - ~60-70% correlated
+- `density` ↔ `spaciousness` (literally opposite) - perfect inverse correlation
+- `warmth` ↔ `intimacy` (warmth already includes "intimate") - ~50-60% correlated
+
+**Effect**: Albums may score similarly across multiple dimensions, reducing diversity in recommendations.
+
+**Workarounds**:
+- User surveys help define unique taste preferences that offset dimension redundancy
+- Algorithm's multi-factor ranking (popularity, recency, diversity) adds variation
+- See [CLAUDE.md](CLAUDE.md) → "Simplicity First" for why we haven't yet refactored
+
+**Future improvement**: Merge redundant dimensions or apply PCA decorrelation (documented in [backend/src/config/emotional-dimensions.ts](backend/src/config/emotional-dimensions.ts) comments)
+
+### External API Rate Limiting
+**Status**: ⚠️ Production consideration
+
+- **Spotify**: 100k requests/month (high threshold, but watch on high-traffic days)
+- **OpenWeatherMap**: Free tier allows 1000 calls/day
+- **Last.fm**: Some endpoints limit to 5 calls/second
+
+**Current handling**: Results are cached in database by (userId, lat, lon) for 24 hours. Repeated requests for same location use cache.
+
+**If you hit rate limits**: Stagger requests, increase cache TTL, or upgrade API plans.
+
+---
+
+## Testing & Debugging
+
+### Manual API Testing
+```bash
+# Test backend endpoint directly (no frontend needed)
+curl "http://localhost:3000/api/recommendations?lat=40.7128&lon=-74.0060" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# Or use Postman/Insomnia GUI for easier testing
+```
+
+### View Real-Time Database Changes
+```bash
+cd backend && npx prisma studio
+# Opens http://localhost:5555 - see all data, edit records directly
+```
+
+### Frontend Debugging
+- **React DevTools**: Install browser extension, inspect component tree and state
+- **Network tab**: Watch API calls, check request/response payloads and timing
+- **Console**: Look for error messages or custom `console.log()` statements
+- **localStorage**: `localStorage.getItem('token')` to check JWT token is persisted
+
+### Backend Debugging
+```bash
+# Backend already logs to console, but add custom debugging:
+console.log("Before recommendation:", { userId, lat, lon });
+const recommendations = await recommendationService.generateRecommendations(...);
+console.log("After recommendation:", recommendations.length, "albums found");
+
+# Or use Node debugger (advanced):
+# node --inspect-brk dist/index.js  # then open chrome://inspect
+```
+
+### Check External API Connectivity
+```bash
+# Test Spotify API
+curl "https://api.spotify.com/v1/me" -H "Authorization: Bearer SPOTIFY_TOKEN"
+
+# Test Weather API
+curl "https://api.openweathermap.org/data/2.5/weather?lat=40.7128&lon=-74.0060&appid=YOUR_KEY"
+
+# Check if APIs are accessible (no auth)
+curl -I https://api.spotify.com/v1/me  # Should return 401 (unauthorized), not connection error
+```
+
+---
+
+## Testing Strategy (Jest / Unit Tests)
+
+Currently tests exist as:
+- **Backend**: Manual tests in `admin-scripts/` (see `test-phase-3b.ts`)
+- **Frontend**: No automated tests yet (TODO)
+
+When adding tests, follow conventions:
+- Backend: Create `*.test.ts` files next to source code, run with `npm test`
+- Frontend: Create `*.test.tsx` files in `__tests__/` folder, use React Testing Library
+
+---
+
+## External API Integration Notes
+
+### Spotify API
+- **Rate limit**: 100,000 requests/month on free tier (very generous)
+- **Auth**: OAuth 2.0 flow with refresh tokens (handled in [backend/src/services/auth.service.ts](backend/src/services/auth.service.ts))
+- **Key endpoints used**: 
+  - `/v1/me/top/tracks` - Get user's top tracks
+  - `/v1/search?q=...&type=album` - Search albums
+  - `/v1/audio-features/{id}` - Get album audio features
+- **Caching**: Search results not cached (Spotify changes frequently); consider adding if response times are slow
+
+### OpenWeatherMap API
+- **Rate limit**: 1,000 calls/day on free tier  
+- **Used for**: Real-time weather at user's location → mood modifier
+- **Caching**: Results cached in DB for 24 hours by (lat, lon) coordinates
+- **Fallback**: If API unavailable, system uses weather from previous cache or defaults to neutral mood
+
+### Last.fm API
+- **Rate limit**: 5 calls/second  
+- **Currently**: Minimal usage (available for future features like "what artists played nearby")
+- **Note**: If adding Last.fm integration, implement request throttling
+
+
 
 ### Before Implementing
 - Check [CLAUDE.md](CLAUDE.md) for coding principles (Simplicity First, Surgical Changes, etc.)
@@ -277,7 +436,11 @@ refactor: redesign home page with modal-based layout for albums and weather
 
 - [README.md](README.md) - Project overview and setup
 - [CLAUDE.md](CLAUDE.md) - General coding principles (Think Before Coding, Simplicity First, etc.)
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Comprehensive troubleshooting guide for common issues
 - [backend/README.md](backend/README.md) - Backend-specific documentation
+- [backend/EMBEDDINGS_QUICK_REFERENCE.md](backend/EMBEDDINGS_QUICK_REFERENCE.md) - Embeddings system quick reference & index
+- [backend/EMBEDDINGS_ARCHITECTURE.md](backend/EMBEDDINGS_ARCHITECTURE.md) - Complete embeddings architecture guide
+- [backend/EMBEDDINGS_CODE_GUIDE.md](backend/EMBEDDINGS_CODE_GUIDE.md) - Line-by-line code walkthrough for all embedding files
 - [backend/prisma/schema.prisma](backend/prisma/schema.prisma) - Database schema
 - Backend API documentation in code comments
 
@@ -287,12 +450,16 @@ refactor: redesign home page with modal-based layout for albums and weather
 
 | Task | Location |
 |------|----------|
+| Setup environment | Copy `backend/.env.example` → `backend/.env`, fill in API keys |
 | Add new page | `frontend/src/pages/PageName.tsx` |
 | Add new component | `frontend/src/components/ComponentName.tsx` |
 | Call API | Update `frontend/src/services/api.ts` |
 | Define type | `frontend/src/types/index.ts` (exported from backend) |
 | Add endpoint | `backend/src/routes/*.routes.ts` + controller + service |
-| Change DB schema | Edit `backend/prisma/schema.prisma` then migrate |
+| Change DB schema | Edit `backend/prisma/schema.prisma` then run `npx prisma migrate dev` |
 | Add context state | `frontend/src/context/ContextName.tsx` |
 | Style component | Use Tailwind classes (e.g., `p-md`, `text-primary`, `bg-secondary`) |
+| View database | Run `npx prisma studio` in `backend/` folder |
+| Debug API | Use Network tab in browser DevTools, or `curl` command to test endpoints |
+| Check logs | Backend: Terminal output; Frontend: Browser console (F12) |
 

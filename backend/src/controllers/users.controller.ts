@@ -15,6 +15,7 @@
 import { Request, Response } from "express";
 import { userService } from "../modules/users/users.service";
 import { surveyService } from "../modules/surveys/survey.service";
+import { logger } from "../shared/logger";
 
 /**
  * User Controller
@@ -68,13 +69,11 @@ export class UserController {
         needsOnboarding,
         readyForAnalysis: surveyCount >= 5,
         tasteProfile: profile ? {
-          valence: profile.valence,
-          arousal: profile.arousal,
-          tension: profile.tension,
-          warmth: profile.warmth,
-          intimacy: profile.intimacy,
-          density: profile.density,
-          groundedness: profile.groundedness,
+          dimensions: profile.dimensions.map(d => ({
+            name: d.dimension.name,
+            label: d.dimension.label,
+            value: d.value,
+          })),
           albumsAnalyzed: profile.albumsAnalyzed,
         } : null,
       });
@@ -156,7 +155,7 @@ export class UserController {
       // Return the complete profile with all emotional dimensions
       res.json(profile);
     } catch (error: any) {
-      console.error("Error fetching taste profile:", error.message);
+      logger.error("USERS", `Error fetching taste profile: ${error.message}`);
       res.status(500).json({
         error: "Failed to fetch taste profile",
         details: error.message

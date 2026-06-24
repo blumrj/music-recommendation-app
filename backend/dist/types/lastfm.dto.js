@@ -9,3 +9,4 @@
  * @module types/lastfm
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+//# sourceMappingURL=lastfm.dto.js.map

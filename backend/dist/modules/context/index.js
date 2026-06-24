@@ -20,3 +20,4 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./weather.service"), exports);
 __exportStar(require("./context-modifier.service"), exports);
+//# sourceMappingURL=index.js.map

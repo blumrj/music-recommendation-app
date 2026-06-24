@@ -107,8 +107,7 @@ class AlbumClusteringService {
         for (const album of userAlbums) {
             try {
                 // Get embedding from Last.fm tags (no Spotify audio features needed)
-                const embedding = await album_embedding_orchestrator_1.albumEmbeddingService.getOrComputeEmbedding(album.spotifyAlbumId, {}, // No audio features needed
-                { albumName: album.albumName, artist: album.artist });
+                const embedding = await album_embedding_orchestrator_1.albumEmbeddingService.getOrComputeEmbedding({ albumName: album.albumName, artist: album.artist });
                 // Log first few successful embeddings to verify they're different
                 if (successCount < 3) {
                     console.log(`[CLUSTERING] Album ${successCount + 1}: ${album.albumName}`, {
@@ -269,3 +268,4 @@ class AlbumClusteringService {
     }
 }
 exports.albumClusteringService = new AlbumClusteringService();
+//# sourceMappingURL=album-clustering.service.js.map

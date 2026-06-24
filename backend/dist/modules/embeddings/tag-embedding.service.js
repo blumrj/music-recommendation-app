@@ -125,3 +125,4 @@ class TagEmbeddingService {
     }
 }
 exports.tagEmbeddingService = new TagEmbeddingService();
+//# sourceMappingURL=tag-embedding.service.js.map

@@ -128,64 +128,62 @@ class ArtistEmbeddingService {
     console.log(`[ARTIST-EMBEDDING] Querying DB for artist: ${originalName}`);
 
     try {
-      // Query all albums by artist - need to join Album table
-      const albums = await prisma.albumEmotionalEmbedding.findMany({
+      // Query all albums by this artist with their intrinsic dimensions
+      const albums = await prisma.album.findMany({
         where: {
-          album: {
-            artist: {
-              equals: originalName,
-              mode: "insensitive"  // Case-insensitive matching
-            }
+          artist: {
+            contains: originalName,
+            mode: 'insensitive' as any
           }
         },
-        select: {
-          valence: true,
-          arousal: true,
-          tension: true,
-          warmth: true,
-          intimacy: true,
-          density: true,
-          groundedness: true,
-          confidence: true
+        include: {
+          intrinsicProfileDimensions: {
+            include: { dimension: true }
+          }
         }
       });
 
       if (albums.length === 0) {
+        console.log(`[ARTIST-EMBEDDING] No albums found for artist: ${originalName}`);
         return null;
       }
 
-      // Filter: only include embeddings with confidence > 0
-      const validAlbums = albums.filter(a => (a.confidence ?? 0) > 0);
-      
-      if (validAlbums.length === 0) {
-        console.log(`[ARTIST-EMBEDDING] Found ${albums.length} albums but none have valid confidence`);
-        return null;
+      console.log(`[ARTIST-EMBEDDING] Found ${albums.length} albums for ${originalName}`);
+
+      // Collect all dimension embeddings from all albums
+      const embeddingsByDimension: { [key: string]: number[] } = {};
+
+      for (const album of albums) {
+        for (const dimData of album.intrinsicProfileDimensions) {
+          if (!embeddingsByDimension[dimData.dimension.name]) {
+            embeddingsByDimension[dimData.dimension.name] = [];
+          }
+          embeddingsByDimension[dimData.dimension.name].push(dimData.value);
+        }
       }
 
-      console.log(`[ARTIST-EMBEDDING] Found ${validAlbums.length} valid albums (of ${albums.length} total)`);
+      // Average the embeddings for each dimension
+      const artistEmbedding: EmotionalVector = {
+        valence: 0.5,
+        arousal: 0.5,
+        tension: 0.5,
+        warmth: 0.5,
+        intimacy: 0.5,
+        density: 0.5,
+        groundedness: 0.5
+      };
 
-      // Average all embeddings
-      const averaged = vectorMath.averageVectors(
-        validAlbums.map(album => ({
-          valence: album.valence,
-          arousal: album.arousal,
-          tension: album.tension,
-          warmth: album.warmth,
-          intimacy: album.intimacy,
-          density: album.density,
-          groundedness: album.groundedness
-        }))
-      );
-
-      // Calculate confidence: more albums = more stable signal
-      // confidence = 0.4 + min(0.3, albumCount / 20)
-      // Range: 0.4 (1 album) to 0.7 (20+ albums)
-      const confidence = 0.4 + Math.min(0.3, validAlbums.length / 20);
+      for (const [dimensionName, values] of Object.entries(embeddingsByDimension)) {
+        if (values.length > 0) {
+          const average = values.reduce((a, b) => a + b, 0) / values.length;
+          artistEmbedding[dimensionName as keyof EmotionalVector] = average;
+        }
+      }
 
       return {
-        embedding: averaged,
-        albumCount: validAlbums.length,
-        confidence
+        embedding: artistEmbedding,
+        albumCount: albums.length,
+        confidence: 0.8 // Database query has high confidence
       };
     } catch (error: any) {
       console.error(`[ARTIST-EMBEDDING] DB query error:`, error.message);

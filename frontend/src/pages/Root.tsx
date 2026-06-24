@@ -37,6 +37,7 @@ const Root = () => {
         isLoggedIn={!!user}
         onLogout={handleLogout}
         onAboutDora={() => setShowDoraInfo(true)}
+        onToggleSidebar={showSidebar ? toggleSidebar : undefined}
       />
 
       {/* About DORA Modal */}
@@ -50,23 +51,13 @@ const Root = () => {
         >
           <div className="p-md text-md text-center">
             <p className="text-xs leading-relaxed mb-2">
-              DORA helps you discover music that feels right for you. By
-              reflecting on albums you love, you start to understand what draws
-              you in—the moods, the sounds, the feelings. It's about learning
-              yourself through music.
+              DORA remembers how music makes you feel.
             </p>
             <p className="text-xs leading-relaxed mb-2">
-              As you tell DORA about your favorite albums—what makes them
-              special, when you listen to them, how they make you feel—a picture
-              of your taste emerges naturally. What are your constant themes?
-              What contexts bring out different sides of you?
+              As you share your favorite albums, what makes them special, when you listen to them, how they make you feel, a picture of your taste emerges naturally. It's about learning yourself through music.
             </p>
             <p className="text-xs leading-relaxed">
-              When you're ready for recommendations, DORA considers who you are
-              musically and what's happening around you—the weather, the time of
-              day, your mood. It's less about being served suggestions and more
-              about finding music that resonates with where you're at in that
-              moment.
+              From that, DORA builds a profile that's entirely yours. When you ask for recommendations, it weighs who you are against the moment you're in and finds something that fits.
             </p>
           </div>
         </Modal>
@@ -74,17 +65,31 @@ const Root = () => {
 
       {/* Page Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar - only visible on home pages */}
+        {/* Sidebar */}
         {showSidebar && (
-          <div
-            className={`overflow-auto bg-primary ${sidebarOpen ? 'w-55' : 'w-12.5'}`}
-            style={{
-              borderRight: "2px solid",
-              borderColor: "rgb(223, 223, 223) rgb(128, 128, 128) rgb(128, 128, 128) rgb(223, 223, 223)",
-            }}
-          >
-            <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
-          </div>
+          <>
+            {/* Mobile backdrop — tap to close */}
+            {sidebarOpen && (
+              <div
+                className="fixed inset-0 z-30 md:hidden"
+                onClick={toggleSidebar}
+              />
+            )}
+
+            <div
+              className={`overflow-auto bg-primary z-40
+                ${sidebarOpen
+                  ? 'fixed md:relative top-13.5 md:top-auto bottom-10.5 md:bottom-auto left-0 w-55'
+                  : 'hidden md:block md:w-12.5'
+                }`}
+              style={{
+                borderRight: "2px solid",
+                borderColor: "rgb(223, 223, 223) rgb(128, 128, 128) rgb(128, 128, 128) rgb(223, 223, 223)",
+              }}
+            >
+              <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
+            </div>
+          </>
         )}
 
         {/* Main Content */}

@@ -10,3 +10,4 @@
  * @module types/embedding
  */
 Object.defineProperty(exports, "__esModule", { value: true });
+//# sourceMappingURL=embedding.dto.js.map

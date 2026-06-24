@@ -212,15 +212,14 @@ export default function Profile() {
           showClose={false}
         >
           <div className="space-y-md">
-            {emotionalDimensions.map((dim: EmotionalDimension) => {
-              const value = profile?.tasteProfile?.[dim.name] as number | undefined;
-              const percentage = value ? Math.round(value * 100) : 0;
+            {profile?.tasteProfile?.dimensions && profile.tasteProfile.dimensions.map((dim) => {
+              const percentage = Math.round(dim.value * 100);
               return (
                 <div key={dim.name}>
                   <ProgressBar
                     value={percentage}
-                    label={dim.name.charAt(0).toUpperCase() + dim.name.slice(1)}
-                    description={dim.description}
+                    label={dim.label || (dim.name.charAt(0).toUpperCase() + dim.name.slice(1))}
+                    description={`${dim.name.charAt(0).toUpperCase() + dim.name.slice(1)} profile`}
                     percentage={percentage}
                     width="100%"
                   />

@@ -26,6 +26,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.lastfmClient = void 0;
 const axios_1 = __importDefault(require("axios"));
+const logger_1 = require("../../shared/logger");
 const LASTFM_BASE_URL = "http://ws.audioscrobbler.com/2.0/";
 const API_KEY = process.env.LASTFM_API_KEY || "";
 /**
@@ -40,7 +41,7 @@ class LastfmClient {
             throttleUntil: 0
         };
         if (!API_KEY) {
-            console.warn("[LASTFM] Warning: LASTFM_API_KEY environment variable not set. Last.fm enrichment will be skipped.");
+            logger_1.logger.warn("LASTFM", "Warning: LASTFM_API_KEY environment variable not set. Last.fm enrichment will be skipped.");
         }
         this.client = axios_1.default.create({
             baseURL: LASTFM_BASE_URL,
@@ -48,27 +49,21 @@ class LastfmClient {
         });
         // Add SYNCHRONOUS request logging (no async operations in interceptor)
         this.client.interceptors.request.use((config) => {
-            console.log(`[LASTFM-CLIENT] Request to:`, {
-                method: config.params?.method,
-                artist: config.params?.artist,
-                album: config.params?.album,
-                hasApiKey: !!API_KEY,
-                rateLimitRemaining: this.rateLimitState.remaining
-            });
+            logger_1.logger.info("LASTFM-CLIENT", `Request: method=${config.params?.method} artist=${config.params?.artist} album=${config.params?.album} remaining=${this.rateLimitState.remaining}`);
             return config;
         });
         // Add response tracking & error handling
         this.client.interceptors.response.use((response) => {
             // Update rate limit state from response headers
             this.updateRateLimitFromHeaders(response.headers);
-            console.log(`[LASTFM-CLIENT] Response: status ${response.status}, remaining requests: ${this.rateLimitState.remaining}`);
+            logger_1.logger.info("LASTFM-CLIENT", `Response: status ${response.status}, remaining ${this.rateLimitState.remaining}`);
             return response;
         }, (error) => {
             // Handle 429 (rate limited) with exponential backoff
             if (error.response?.status === 429) {
                 const retryAfter = parseInt(error.response.headers['retry-after'] || '60', 10);
                 const backoffMs = retryAfter * 1000 * 2; // Double the suggested wait
-                console.error(`[LASTFM-RATELIMIT] Hit rate limit! Backing off for ${backoffMs}ms`);
+                logger_1.logger.error("LASTFM-RATELIMIT", `Hit rate limit! Backing off for ${backoffMs}ms`);
                 this.rateLimitState.throttleUntil = Date.now() + backoffMs;
             }
             // Construct full URL for better debugging
@@ -77,15 +72,7 @@ class LastfmClient {
             // Check if response is HTML (indicates wrong endpoint)
             const responseType = typeof error.response?.data;
             const isHtmlResponse = responseType === 'string' && error.response?.data?.includes('<');
-            console.error(`[LASTFM-CLIENT] Error:`, {
-                message: error.message,
-                status: error.response?.status,
-                url: fullUrl,
-                method: params?.method,
-                artist: params?.artist,
-                isHtmlResponse,
-                dataPreview: responseType === 'string' ? error.response?.data?.substring(0, 100) : error.response?.data
-            });
+            logger_1.logger.error("LASTFM-CLIENT", `Error: ${error.message} status=${error.response?.status} method=${params?.method} artist=${params?.artist} isHtml=${isHtmlResponse}`);
             // Don't rethrow; return null for graceful degradation
             return null;
         });
@@ -105,7 +92,7 @@ class LastfmClient {
         if (remaining < limit * 0.1) {
             const throttleMs = Math.max(500, (resetTime * 1000 - Date.now()) / 2); // At least 500ms, wait half of reset window
             this.rateLimitState.throttleUntil = Math.max(this.rateLimitState.throttleUntil, Date.now() + throttleMs);
-            console.warn(`[LASTFM-RATELIMIT] Low on requests (${remaining}/${limit}), throttling enabled until reset at ${new Date(this.rateLimitState.resetTime * 1000).toISOString()}`);
+            logger_1.logger.warn("LASTFM-RATELIMIT", `Low on requests (${remaining}/${limit}), throttling until ${new Date(this.rateLimitState.resetTime * 1000).toISOString()}`);
         }
     }
     /**
@@ -130,17 +117,17 @@ class LastfmClient {
      */
     async fetchAlbumTags(artistName, albumName) {
         if (!API_KEY) {
-            console.log(`[LASTFM] Skipping album tags (no API key): ${artistName} - ${albumName}`);
+            logger_1.logger.info("LASTFM", `Skipping album tags (no API key): ${artistName} - ${albumName}`);
             return [];
         }
         // Check throttle state BEFORE making request
         if (this.rateLimitState.throttleUntil > Date.now()) {
             const waitMs = this.rateLimitState.throttleUntil - Date.now();
-            console.warn(`[LASTFM-THROTTLE] Rate limit approaching, waiting ${waitMs}ms before request`);
+            logger_1.logger.warn("LASTFM-THROTTLE", `Rate limit approaching, waiting ${waitMs}ms before request`);
             await this.sleep(waitMs);
         }
         try {
-            console.log(`[LASTFM] Fetching album tags: ${artistName} - ${albumName}`);
+            logger_1.logger.info("LASTFM", `Fetching album tags: ${artistName} - ${albumName}`);
             const response = await this.client.get("", {
                 params: {
                     method: "album.getTopTags",
@@ -152,17 +139,16 @@ class LastfmClient {
                 }
             });
             if (!response?.data?.toptags?.tag) {
-                console.warn(`[LASTFM] No tags found for album: ${albumName}`);
+                logger_1.logger.warn("LASTFM", `No tags found for album: ${albumName}`);
                 return [];
             }
             const tags = response.data.toptags.tag;
             const parsed = this.parseTags(tags);
-            console.log(`[LASTFM] ✓ Got ${parsed.length} tags for album: ${albumName}`);
-            parsed.forEach(t => console.log(`[LASTFM]   - ${t.tag} (${t.count})`));
+            logger_1.logger.info("LASTFM", `✓ Got ${parsed.length} tags for album: ${albumName}`);
             return parsed;
         }
         catch (error) {
-            console.error(`[LASTFM] Failed to fetch album tags for ${albumName}: ${error.message}`);
+            logger_1.logger.error("LASTFM", `Failed to fetch album tags for ${albumName}: ${error.message}`);
             return [];
         }
     }
@@ -181,17 +167,17 @@ class LastfmClient {
      */
     async fetchArtistTags(artistName) {
         if (!API_KEY) {
-            console.log(`[LASTFM] Skipping artist tags (no API key): ${artistName}`);
+            logger_1.logger.info("LASTFM", `Skipping artist tags (no API key): ${artistName}`);
             return [];
         }
         // Check throttle state BEFORE making request
         if (this.rateLimitState.throttleUntil > Date.now()) {
             const waitMs = this.rateLimitState.throttleUntil - Date.now();
-            console.warn(`[LASTFM-THROTTLE] Rate limit approaching, waiting ${waitMs}ms before request`);
+            logger_1.logger.warn("LASTFM-THROTTLE", `Rate limit approaching, waiting ${waitMs}ms before request`);
             await this.sleep(waitMs);
         }
         try {
-            console.log(`[LASTFM] Fetching artist tags (fallback): ${artistName}`);
+            logger_1.logger.info("LASTFM", `Fetching artist tags (fallback): ${artistName}`);
             const response = await this.client.get("", {
                 params: {
                     method: "artist.getTopTags",
@@ -202,18 +188,16 @@ class LastfmClient {
                 }
             });
             if (!response?.data?.toptags?.tag) {
-                console.warn(`[LASTFM] No tags found for artist: ${artistName}`);
+                logger_1.logger.warn("LASTFM", `No tags found for artist: ${artistName}`);
                 return [];
             }
             const tags = response.data.toptags.tag;
             const parsed = this.parseTags(tags);
-            console.log(`[LASTFM] ✓ Got ${parsed.length} tags for artist: ${artistName}`);
-            parsed.forEach(t => console.log(`[LASTFM]   - ${t.tag} (${t.count})`));
-            ;
+            logger_1.logger.info("LASTFM", `✓ Got ${parsed.length} tags for artist: ${artistName}`);
             return parsed;
         }
         catch (error) {
-            console.error(`[LASTFM] Failed to fetch artist tags for ${artistName}: ${error.message}`);
+            logger_1.logger.error("LASTFM", `Failed to fetch artist tags for ${artistName}: ${error.message}`);
             return [];
         }
     }
@@ -251,17 +235,17 @@ class LastfmClient {
      */
     async getSimilarArtists(artistName, limit = 15) {
         if (!API_KEY) {
-            console.log(`[LASTFM] Skipping similar artists (no API key): ${artistName}`);
+            logger_1.logger.info("LASTFM", `Skipping similar artists (no API key): ${artistName}`);
             return [];
         }
         // Check throttle state
         if (this.rateLimitState.throttleUntil > Date.now()) {
             const waitMs = this.rateLimitState.throttleUntil - Date.now();
-            console.warn(`[LASTFM-THROTTLE] Rate limit approaching, waiting ${waitMs}ms`);
+            logger_1.logger.warn("LASTFM-THROTTLE", `Rate limit approaching, waiting ${waitMs}ms`);
             await this.sleep(waitMs);
         }
         try {
-            console.log(`[LASTFM] Getting similar artists for "${artistName}"...`);
+            logger_1.logger.info("LASTFM", `Getting similar artists for "${artistName}"...`);
             const response = await this.client.get("", {
                 params: {
                     method: "artist.getSimilar",
@@ -273,7 +257,7 @@ class LastfmClient {
                 }
             });
             if (!response?.data?.similarartists?.artist) {
-                console.warn(`[LASTFM] No similar artists found for "${artistName}"`);
+                logger_1.logger.warn("LASTFM", `No similar artists found for "${artistName}"`);
                 return [];
             }
             const artists = response.data.similarartists.artist;
@@ -281,7 +265,7 @@ class LastfmClient {
             return Array.isArray(artists) ? artists : [artists];
         }
         catch (error) {
-            console.error(`[LASTFM] Error getting similar artists for "${artistName}":`, error.message);
+            logger_1.logger.error("LASTFM", `Error getting similar artists for "${artistName}": ${error.message}`);
             return [];
         }
     }
@@ -296,17 +280,17 @@ class LastfmClient {
      */
     async getTopAlbumsByArtist(artistName, limit = 10) {
         if (!API_KEY) {
-            console.log(`[LASTFM] Skipping artist albums (no API key): ${artistName}`);
+            logger_1.logger.info("LASTFM", `Skipping artist albums (no API key): ${artistName}`);
             return [];
         }
         // Check throttle state
         if (this.rateLimitState.throttleUntil > Date.now()) {
             const waitMs = this.rateLimitState.throttleUntil - Date.now();
-            console.warn(`[LASTFM-THROTTLE] Rate limit approaching, waiting ${waitMs}ms`);
+            logger_1.logger.warn("LASTFM-THROTTLE", `Rate limit approaching, waiting ${waitMs}ms`);
             await this.sleep(waitMs);
         }
         try {
-            console.log(`[LASTFM] Getting top ${limit} albums for "${artistName}"...`);
+            logger_1.logger.info("LASTFM", `Getting top ${limit} albums for "${artistName}"...`);
             const response = await this.client.get("", {
                 params: {
                     method: "artist.getTopAlbums",
@@ -318,7 +302,7 @@ class LastfmClient {
                 }
             });
             if (!response?.data?.topalbums?.album) {
-                console.warn(`[LASTFM] No albums found for artist "${artistName}"`);
+                logger_1.logger.warn("LASTFM", `No albums found for artist "${artistName}"`);
                 return [];
             }
             const albums = response.data.topalbums.album;
@@ -326,7 +310,7 @@ class LastfmClient {
             return Array.isArray(albums) ? albums : [albums];
         }
         catch (error) {
-            console.error(`[LASTFM] Error getting top albums for "${artistName}":`, error.message);
+            logger_1.logger.error("LASTFM", `Error getting top albums for "${artistName}": ${error.message}`);
             return [];
         }
     }
@@ -341,17 +325,17 @@ class LastfmClient {
      */
     async getTopAlbumsByTag(tagName, limit = 10) {
         if (!API_KEY) {
-            console.log(`[LASTFM] Skipping tag albums (no API key): ${tagName}`);
+            logger_1.logger.info("LASTFM", `Skipping tag albums (no API key): ${tagName}`);
             return [];
         }
         // Check throttle state
         if (this.rateLimitState.throttleUntil > Date.now()) {
             const waitMs = this.rateLimitState.throttleUntil - Date.now();
-            console.warn(`[LASTFM-THROTTLE] Rate limit approaching, waiting ${waitMs}ms`);
+            logger_1.logger.warn("LASTFM-THROTTLE", `Rate limit approaching, waiting ${waitMs}ms`);
             await this.sleep(waitMs);
         }
         try {
-            console.log(`[LASTFM] Getting top ${limit} albums for tag "${tagName}"...`);
+            logger_1.logger.info("LASTFM", `Getting top ${limit} albums for tag "${tagName}"...`);
             const response = await this.client.get("", {
                 params: {
                     method: "tag.getTopAlbums",
@@ -362,7 +346,7 @@ class LastfmClient {
                 }
             });
             if (!response?.data?.albums?.album) {
-                console.warn(`[LASTFM] No albums found for tag "${tagName}"`);
+                logger_1.logger.warn("LASTFM", `No albums found for tag "${tagName}"`);
                 return [];
             }
             const albums = response.data.albums.album;
@@ -370,9 +354,10 @@ class LastfmClient {
             return Array.isArray(albums) ? albums : [albums];
         }
         catch (error) {
-            console.error(`[LASTFM] Error getting albums for tag "${tagName}":`, error.message);
+            logger_1.logger.error("LASTFM", `Error getting albums for tag "${tagName}": ${error.message}`);
             return [];
         }
     }
 }
 exports.lastfmClient = new LastfmClient();
+//# sourceMappingURL=lastfm-client.js.map

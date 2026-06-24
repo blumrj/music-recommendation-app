@@ -103,13 +103,21 @@ class ApiClient {
   // Recommendations - get album suggestions based on weather/mood and location
   // Requires: User location (latitude, longitude)
   // Optional: userId to load personalized profile
-  // Returns: Weather mood + personalized album recommendations
+  // Returns: Personalized album recommendations
   async getRecommendations(lat: number, lon: number, userId?: string): Promise<Record<string, unknown>> {
     let url = `/recommendations?lat=${lat}&lon=${lon}`;
     if (userId) {
       url += `&userId=${userId}`;
     }
     const response = await this.client.get(url);
+    return response.data;
+  }
+
+  // Weather - get current weather for a location
+  // Requires: User location (latitude, longitude)
+  // Returns: Weather condition, temperature, humidity, season, time of day
+  async getWeather(lat: number, lon: number): Promise<Record<string, unknown>> {
+    const response = await this.client.get(`/weather?lat=${lat}&lon=${lon}`);
     return response.data;
   }
 

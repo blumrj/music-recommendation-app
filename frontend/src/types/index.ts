@@ -27,6 +27,17 @@ export interface SurveyedAlbumsResponse {
   totalCount: number;
 }
 
+export interface UserProfileDimension {
+  name: string;
+  label: string;
+  value: number; // 0-1 scale
+}
+
+export interface UserTasteProfile {
+  dimensions: UserProfileDimension[];
+  albumsAnalyzed: number;
+}
+
 export interface UserProfileResponse {
   id: string;
   email: string;
@@ -36,7 +47,7 @@ export interface UserProfileResponse {
   surveyCount: number;
   needsOnboarding: boolean;
   readyForAnalysis: boolean;
-  tasteProfile?: Record<string, number>;
+  tasteProfile?: UserTasteProfile;
 }
 
 // ===== ALBUMS & RECOMMENDATIONS =====
@@ -47,6 +58,7 @@ export interface Album {
   artist: string;
   imageUrl: string;
   spotifyUrl?: string;
+  source?: 'spotify' | 'catalog';
 }
 
 export interface Recommendation extends Album {
@@ -61,16 +73,18 @@ export interface GenreCollection {
 
 export interface RecommendationsResponse {
   mood?: string;
-  weather?: {
-    condition: string;
-    temp: number;
-    humidity: number;
-    season?: string;
-    timeOfDay?: string;
-  };
   recommendations?: Recommendation[];
   genres?: GenreCollection[];
   tracks?: Recommendation[];
+  generatedAt?: string;
+}
+
+export interface WeatherContext {
+  condition: string;
+  temp: number;
+  humidity: number;
+  season: string;
+  timeOfDay: string;
 }
 
 // ===== SLIDER RESPONSES (SURVEY) =====

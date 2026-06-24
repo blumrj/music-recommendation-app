@@ -21,7 +21,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.recommendationController = void 0;
 const recommendation_service_1 = require("../modules/recommendations/recommendation.service");
-const users_service_1 = require("../modules/users/users.service");
 /**
  * Recommendation Controller
  *
@@ -97,9 +96,10 @@ class RecommendationController {
         try {
             /**
              * STEP 1: EXTRACT HTTP DATA
-             * authMiddleware already validated the JWT, so req.userId is safe to use
+             * authMiddleware already validated the JWT and attached userId and spotifyToken
              */
             const userId = req.userId;
+            const spotifyToken = req.spotifyToken;
             /**
              * STEP 2: EXTRACT LOCATION FROM QUERY PARAMS
              * Location is used for:
@@ -118,30 +118,13 @@ class RecommendationController {
                 });
             }
             /**
-             * STEP 4: GET USER'S SPOTIFY CREDENTIALS
-             * Why we need this:
-             * - Get user's Spotify access token (needed to call Spotify API)
-             * - Get user's Spotify refresh token (in case access token expired)
-             * - Verify user exists and has Spotify auth (validation)
-             *
-             * ARCHITECTURE: Delegate to service (SoC - service handles DB)
-             * NOT in controller (which only handles HTTP)
+             * STEP 4: VALIDATE SPOTIFY TOKEN
+             * Middleware already refreshed and attached it, but verify it exists
              */
-            let userCredentials;
-            try {
-                userCredentials = await users_service_1.userService.getUserSpotifyCredentials(userId);
-            }
-            catch (error) {
-                // Service throws specific errors we can translate to HTTP responses
-                if (error.message.includes("not found")) {
-                    return res.status(404).json({ error: "User not found" });
-                }
-                if (error.message.includes("not authenticated")) {
-                    return res.status(401).json({
-                        error: "User not authenticated with Spotify. Please connect your Spotify account."
-                    });
-                }
-                throw error; // Re-throw other errors to catch block
+            if (!spotifyToken) {
+                return res.status(401).json({
+                    error: "User not authenticated with Spotify. Please connect your Spotify account."
+                });
             }
             /**
              * STEP 5: DELEGATE TO SERVICE
@@ -161,11 +144,10 @@ class RecommendationController {
              *
              * Response will include: recommendations, weather info, mood, cache status
              */
-            const recommendations = await recommendation_service_1.recommendationService.generateRecommendations(userCredentials.spotifyToken, // Access token for Spotify API calls
+            const recommendations = await recommendation_service_1.recommendationService.generateRecommendations(spotifyToken, // Fresh access token (already refreshed by middleware)
             parseFloat(lat), // User's latitude
             parseFloat(lon), // User's longitude
-            userId, // For database operations and cache key
-            userCredentials.spotifyRefreshToken // In case token refresh needed
+            userId // For database operations and cache key
             );
             /**
              * STEP 6: RETURN RECOMMENDATIONS TO FRONTEND
@@ -220,3 +202,4 @@ class RecommendationController {
  * @type {RecommendationController}
  */
 exports.recommendationController = new RecommendationController();
+//# sourceMappingURL=recommendation.controller.js.map

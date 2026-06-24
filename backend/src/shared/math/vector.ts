@@ -174,7 +174,7 @@ export function addVectors(
   const result = { ...base };
 
   (Object.keys(delta) as (keyof Partial<EmotionalVector>)[]).forEach((dim) => {
-    if (dim in EMOTIONAL_DIMENSIONS && delta[dim] !== undefined) {
+    if (EMOTIONAL_DIMENSIONS.includes(dim as keyof EmotionalVector) && delta[dim] !== undefined) {
       (result[dim as keyof EmotionalVector] as number) = Math.max(
         0,
         Math.min(1, ((result[dim as keyof EmotionalVector] ?? 0.5) + ((delta[dim] as number) ?? 0)))

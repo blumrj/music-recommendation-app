@@ -111,3 +111,4 @@ exports.WeatherService = WeatherService;
  * @type {WeatherService}
  */
 exports.weatherService = new WeatherService();
+//# sourceMappingURL=weather.service.js.map

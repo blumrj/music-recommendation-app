@@ -20,6 +20,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.userService = exports.UserService = void 0;
 const client_1 = require("@prisma/client");
+const auth_service_1 = require("../auth/auth.service");
+const logger_1 = require("../../shared/logger");
 /**
  * Prisma client instance for database operations
  * @type {PrismaClient}
@@ -60,8 +62,7 @@ class UserService {
      */
     async getUserById(userId) {
         const user = await prisma.user.findUnique({
-            where: { id: userId },
-            include: { albums: true },
+            where: { id: userId }
         });
         return user;
     }
@@ -171,6 +172,11 @@ class UserService {
     async getTasteProfile(userId) {
         const profile = await prisma.userTasteProfile.findUnique({
             where: { userId },
+            include: {
+                dimensions: {
+                    include: { dimension: true }
+                }
+            }
         });
         return profile;
     }
@@ -215,6 +221,66 @@ class UserService {
         }
     }
     /**
+     * Get and refresh Spotify token if needed
+     *
+     * Retrieves user's Spotify access token, refreshing it if a refresh token exists.
+     * Updates the database with the fresh token.
+     *
+     * @async
+     * @param {string} userId - User ID from JWT token
+     *
+     * @returns {Promise<string>} Fresh Spotify access token
+     *
+     * @throws {Error} "User not found" if userId is invalid
+     * @throws {Error} "User not authenticated with Spotify" if no access token stored
+     *
+     * Flow:
+     * 1. Look up user by ID
+     * 2. If no user or no Spotify token, throw error
+     * 3. If refresh token exists, exchange it for new access token via Spotify API
+     * 4. Update user's stored token with fresh one
+     * 5. Return the token (fresh or original)
+     *
+     * @example
+     * const spotifyToken = await userService.getAndRefreshSpotifyToken(userId);
+     * // Now use spotifyToken for Spotify API calls
+     */
+    async getAndRefreshSpotifyToken(userId) {
+        try {
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { spotifyToken: true, spotifyRefreshToken: true }
+            });
+            if (!user || !user.spotifyToken) {
+                throw new Error("User not authenticated with Spotify");
+            }
+            // If refresh token available, exchange it for new access token
+            if (user.spotifyRefreshToken && user.spotifyRefreshToken.length > 0) {
+                try {
+                    const newTokens = await auth_service_1.authService.refreshAccessToken(user.spotifyRefreshToken);
+                    const freshToken = newTokens.access_token;
+                    // Update user with fresh token
+                    await prisma.user.update({
+                        where: { id: userId },
+                        data: { spotifyToken: freshToken }
+                    });
+                    logger_1.logger.info("USERS", "✓ Spotify token refreshed and persisted");
+                    return freshToken;
+                }
+                catch (error) {
+                    // If refresh fails, fall back to existing token
+                    logger_1.logger.warn("USERS", `Spotify token refresh failed: ${error.message}`);
+                    return user.spotifyToken;
+                }
+            }
+            // No refresh token available, return existing token
+            return user.spotifyToken;
+        }
+        catch (error) {
+            throw new Error(`Failed to get Spotify token: ${error.message}`);
+        }
+    }
+    /**
      * Get user's taste and perception bias layers
      *
      * Returns the complete two-layer user profile:
@@ -241,29 +307,38 @@ class UserService {
     async getUserTasteProfileWithBias13D(userId) {
         try {
             const profile = await prisma.userTasteProfile.findUnique({
-                where: { userId }
+                where: { userId },
+                include: {
+                    dimensions: {
+                        include: { dimension: true }
+                    }
+                }
             });
             if (!profile) {
                 return null;
             }
-            // Extract both taste and bias vectors
+            // Convert dimension rows back to taste vector
             const taste = {
-                valence: profile.valence ?? 0.5,
-                arousal: profile.arousal ?? 0.5,
-                tension: profile.tension ?? 0.5,
-                warmth: profile.warmth ?? 0.5,
-                intimacy: profile.intimacy ?? 0.5,
-                density: profile.density ?? 0.5,
-                groundedness: profile.groundedness ?? 0.5
+                valence: 0.5,
+                arousal: 0.5,
+                tension: 0.5,
+                warmth: 0.5,
+                intimacy: 0.5,
+                density: 0.5,
+                groundedness: 0.5
             };
+            for (const dim of profile.dimensions) {
+                taste[dim.dimension.name] = dim.value;
+            }
+            // Bias layer removed - compute on the fly if needed
             const bias = {
-                valence: profile.bias_valence ?? 0.0,
-                arousal: profile.bias_arousal ?? 0.0,
-                tension: profile.bias_tension ?? 0.0,
-                warmth: profile.bias_warmth ?? 0.0,
-                intimacy: profile.bias_intimacy ?? 0.0,
-                density: profile.bias_density ?? 0.0,
-                groundedness: profile.bias_groundedness ?? 0.0
+                valence: 0.0,
+                arousal: 0.0,
+                tension: 0.0,
+                warmth: 0.0,
+                intimacy: 0.0,
+                density: 0.0,
+                groundedness: 0.0
             };
             return { taste, bias };
         }
@@ -281,3 +356,4 @@ exports.UserService = UserService;
  * @type {UserService}
  */
 exports.userService = new UserService();
+//# sourceMappingURL=users.service.js.map

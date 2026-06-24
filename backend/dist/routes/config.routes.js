@@ -17,3 +17,4 @@ exports.configRouter.get('/emotional-dimensions', (req, res) => {
         res.status(500).json({ error: 'Failed to retrieve emotional dimensions' });
     }
 });
+//# sourceMappingURL=config.routes.js.map

@@ -139,3 +139,4 @@ router.get("/me", authMiddleware_1.authMiddleware, (req, res) => auth_controller
  * @exports router - Express router with authentication endpoints
  */
 exports.authRoutes = router;
+//# sourceMappingURL=auth.routes.js.map

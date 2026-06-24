@@ -95,3 +95,4 @@ function getDimensions() {
 function getDimension(name) {
     return exports.EMOTIONAL_DIMENSIONS[name];
 }
+//# sourceMappingURL=emotional-dimensions.js.map

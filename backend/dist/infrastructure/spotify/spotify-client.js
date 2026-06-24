@@ -83,3 +83,4 @@ function createSpotifyClient(accessToken) {
     });
     return client;
 }
+//# sourceMappingURL=spotify-client.js.map

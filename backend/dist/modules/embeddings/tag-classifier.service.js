@@ -228,3 +228,4 @@ class TagClassifierService {
 }
 // Export singleton instance
 exports.tagClassifierService = new TagClassifierService();
+//# sourceMappingURL=tag-classifier.service.js.map

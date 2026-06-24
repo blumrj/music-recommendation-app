@@ -17,6 +17,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const recommendation_controller_1 = require("../controllers/recommendation.controller");
 const authMiddleware_1 = require("../middleware/authMiddleware");
+const spotifyRefreshMiddleware_1 = require("../middleware/spotifyRefreshMiddleware");
 /**
  * Express router instance for recommendation routes
  * @type {Router}
@@ -71,10 +72,11 @@ const router = (0, express_1.Router)();
  *   generatedAt: "2026-05-08T10:30:00Z"
  * }
  */
-router.get("/recommendations", authMiddleware_1.authMiddleware, recommendation_controller_1.recommendationController.getRecommendations.bind(recommendation_controller_1.recommendationController));
+router.get("/recommendations", authMiddleware_1.authMiddleware, spotifyRefreshMiddleware_1.spotifyRefreshMiddleware, recommendation_controller_1.recommendationController.getRecommendations.bind(recommendation_controller_1.recommendationController));
 /**
  * Recommendation routes export
  *
  * @exports router - Express router with recommendation endpoints
  */
 exports.default = router;
+//# sourceMappingURL=recommendation.routes.js.map

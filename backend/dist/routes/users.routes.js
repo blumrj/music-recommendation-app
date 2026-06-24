@@ -114,3 +114,4 @@ router.post("/analyze-taste", authMiddleware_1.authMiddleware, (req, res) => sur
  * @exports router - Express router with user-related endpoints
  */
 exports.default = router;
+//# sourceMappingURL=users.routes.js.map

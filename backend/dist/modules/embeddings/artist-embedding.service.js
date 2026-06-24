@@ -20,43 +20,9 @@
  * @category Services
  * @module services/artist-embedding
  */
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.artistEmbeddingService = void 0;
 const client_1 = require("@prisma/client");
-const vectorMath = __importStar(require("../../shared/math/vector"));
 const prisma = new client_1.PrismaClient();
 /**
  * Artist Embedding Service
@@ -139,63 +105,55 @@ class ArtistEmbeddingService {
     async computeArtistAverage(normalizedName, originalName) {
         console.log(`[ARTIST-EMBEDDING] Querying DB for artist: ${originalName}`);
         try {
-            // Query all albums by artist
-            const albums = await prisma.albumEmotionalEmbedding.findMany({
+            // Query all albums by this artist with their intrinsic dimensions
+            const albums = await prisma.album.findMany({
                 where: {
                     artist: {
-                        equals: originalName,
-                        mode: "insensitive" // Case-insensitive matching
+                        contains: originalName,
+                        mode: 'insensitive'
                     }
                 },
-                select: {
-                    valence: true,
-                    arousal: true,
-                    tension: true,
-                    warmth: true,
-                    intimacy: true,
-                    density: true,
-                    spaciousness: true,
-                    organicSynthetic: true,
-                    nostalgia: true,
-                    groundedness: true,
-                    introspection: true,
-                    movement: true,
-                    confidence: true
+                include: {
+                    intrinsicProfileDimensions: {
+                        include: { dimension: true }
+                    }
                 }
             });
             if (albums.length === 0) {
+                console.log(`[ARTIST-EMBEDDING] No albums found for artist: ${originalName}`);
                 return null;
             }
-            // Filter: only include embeddings with confidence > 0
-            const validAlbums = albums.filter(a => (a.confidence ?? 0) > 0);
-            if (validAlbums.length === 0) {
-                console.log(`[ARTIST-EMBEDDING] Found ${albums.length} albums but none have valid confidence`);
-                return null;
+            console.log(`[ARTIST-EMBEDDING] Found ${albums.length} albums for ${originalName}`);
+            // Collect all dimension embeddings from all albums
+            const embeddingsByDimension = {};
+            for (const album of albums) {
+                for (const dimData of album.intrinsicProfileDimensions) {
+                    if (!embeddingsByDimension[dimData.dimension.name]) {
+                        embeddingsByDimension[dimData.dimension.name] = [];
+                    }
+                    embeddingsByDimension[dimData.dimension.name].push(dimData.value);
+                }
             }
-            console.log(`[ARTIST-EMBEDDING] Found ${validAlbums.length} valid albums (of ${albums.length} total)`);
-            // Average all embeddings
-            const averaged = vectorMath.averageVectors(validAlbums.map(album => ({
-                valence: album.valence,
-                arousal: album.arousal,
-                tension: album.tension,
-                warmth: album.warmth,
-                intimacy: album.intimacy,
-                density: album.density,
-                spaciousness: album.spaciousness,
-                organicSynthetic: album.organicSynthetic,
-                nostalgia: album.nostalgia,
-                groundedness: album.groundedness,
-                introspection: album.introspection,
-                movement: album.movement
-            })));
-            // Calculate confidence: more albums = more stable signal
-            // confidence = 0.4 + min(0.3, albumCount / 20)
-            // Range: 0.4 (1 album) to 0.7 (20+ albums)
-            const confidence = 0.4 + Math.min(0.3, validAlbums.length / 20);
+            // Average the embeddings for each dimension
+            const artistEmbedding = {
+                valence: 0.5,
+                arousal: 0.5,
+                tension: 0.5,
+                warmth: 0.5,
+                intimacy: 0.5,
+                density: 0.5,
+                groundedness: 0.5
+            };
+            for (const [dimensionName, values] of Object.entries(embeddingsByDimension)) {
+                if (values.length > 0) {
+                    const average = values.reduce((a, b) => a + b, 0) / values.length;
+                    artistEmbedding[dimensionName] = average;
+                }
+            }
             return {
-                embedding: averaged,
-                albumCount: validAlbums.length,
-                confidence
+                embedding: artistEmbedding,
+                albumCount: albums.length,
+                confidence: 0.8 // Database query has high confidence
             };
         }
         catch (error) {
@@ -279,3 +237,4 @@ class ArtistEmbeddingService {
 }
 // Export singleton instance
 exports.artistEmbeddingService = new ArtistEmbeddingService();
+//# sourceMappingURL=artist-embedding.service.js.map

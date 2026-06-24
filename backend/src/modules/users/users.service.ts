@@ -18,6 +18,8 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { authService } from "../auth/auth.service";
+import { logger } from "../../shared/logger";
 
 /**
  * Prisma client instance for database operations
@@ -182,6 +184,11 @@ export class UserService {
   async getTasteProfile(userId: string) {
     const profile = await prisma.userTasteProfile.findUnique({
       where: { userId },
+      include: {
+        dimensions: {
+          include: { dimension: true }
+        }
+      }
     });
     return profile;
   }
@@ -230,6 +237,70 @@ export class UserService {
   }
 
   /**
+   * Get and refresh Spotify token if needed
+   * 
+   * Retrieves user's Spotify access token, refreshing it if a refresh token exists.
+   * Updates the database with the fresh token.
+   * 
+   * @async
+   * @param {string} userId - User ID from JWT token
+   * 
+   * @returns {Promise<string>} Fresh Spotify access token
+   * 
+   * @throws {Error} "User not found" if userId is invalid
+   * @throws {Error} "User not authenticated with Spotify" if no access token stored
+   * 
+   * Flow:
+   * 1. Look up user by ID
+   * 2. If no user or no Spotify token, throw error
+   * 3. If refresh token exists, exchange it for new access token via Spotify API
+   * 4. Update user's stored token with fresh one
+   * 5. Return the token (fresh or original)
+   * 
+   * @example
+   * const spotifyToken = await userService.getAndRefreshSpotifyToken(userId);
+   * // Now use spotifyToken for Spotify API calls
+   */
+  async getAndRefreshSpotifyToken(userId: string): Promise<string> {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { spotifyToken: true, spotifyRefreshToken: true }
+      });
+
+      if (!user || !user.spotifyToken) {
+        throw new Error("User not authenticated with Spotify");
+      }
+
+      // If refresh token available, exchange it for new access token
+      if (user.spotifyRefreshToken && user.spotifyRefreshToken.length > 0) {
+        try {
+          const newTokens = await authService.refreshAccessToken(user.spotifyRefreshToken);
+          const freshToken = newTokens.access_token;
+
+          // Update user with fresh token
+          await prisma.user.update({
+            where: { id: userId },
+            data: { spotifyToken: freshToken }
+          });
+
+          logger.info("USERS", "✓ Spotify token refreshed and persisted");
+          return freshToken;
+        } catch (error: any) {
+          // If refresh fails, fall back to existing token
+          logger.warn("USERS", `Spotify token refresh failed: ${error.message}`);
+          return user.spotifyToken;
+        }
+      }
+
+      // No refresh token available, return existing token
+      return user.spotifyToken;
+    } catch (error: any) {
+      throw new Error(`Failed to get Spotify token: ${error.message}`);
+    }
+  }
+
+  /**
    * Get user's taste and perception bias layers
    * 
    * Returns the complete two-layer user profile:
@@ -256,32 +327,42 @@ export class UserService {
   async getUserTasteProfileWithBias13D(userId: string) {
     try {
       const profile = await prisma.userTasteProfile.findUnique({
-        where: { userId }
+        where: { userId },
+        include: {
+          dimensions: {
+            include: { dimension: true }
+          }
+        }
       });
 
       if (!profile) {
         return null;
       }
 
-      // Extract both taste and bias vectors
-      const taste = {
-        valence: profile.valence ?? 0.5,
-        arousal: profile.arousal ?? 0.5,
-        tension: profile.tension ?? 0.5,
-        warmth: profile.warmth ?? 0.5,
-        intimacy: profile.intimacy ?? 0.5,
-        density: profile.density ?? 0.5,
-        groundedness: profile.groundedness ?? 0.5
+      // Convert dimension rows back to taste vector
+      const taste: any = {
+        valence: 0.5,
+        arousal: 0.5,
+        tension: 0.5,
+        warmth: 0.5,
+        intimacy: 0.5,
+        density: 0.5,
+        groundedness: 0.5
       };
 
+      for (const dim of profile.dimensions) {
+        taste[dim.dimension.name] = dim.value;
+      }
+
+      // Bias layer removed - compute on the fly if needed
       const bias = {
-        valence: profile.bias_valence ?? 0.0,
-        arousal: profile.bias_arousal ?? 0.0,
-        tension: profile.bias_tension ?? 0.0,
-        warmth: profile.bias_warmth ?? 0.0,
-        intimacy: profile.bias_intimacy ?? 0.0,
-        density: profile.bias_density ?? 0.0,
-        groundedness: profile.bias_groundedness ?? 0.0
+        valence: 0.0,
+        arousal: 0.0,
+        tension: 0.0,
+        warmth: 0.0,
+        intimacy: 0.0,
+        density: 0.0,
+        groundedness: 0.0
       };
 
       return { taste, bias };

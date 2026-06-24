@@ -28,6 +28,8 @@ import userRoutes from "./routes/users.routes";
 import recommendationRoutes from "./routes/recommendation.routes";
 import { authRoutes } from "./routes/auth.routes";
 import { configRouter } from "./routes/config.routes";
+import weatherRoutes from "./routes/weather.routes";
+import { seedDimensions } from "./config/dimension-seeder";
 
 /**
  * Load environment variables from .env file
@@ -68,12 +70,14 @@ app.use(express.json());
  * - albumRoutes: Favorites, surveys
  * - authRoutes: Spotify OAuth, token management
  * - recommendationRoutes: Weather-based recommendations
+ * - weatherRoutes: Weather data for locations
  * - configRouter: Application configuration endpoints
  */
 app.use("/api/users", userRoutes);
 app.use("/api/albums", albumRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api", recommendationRoutes);
+app.use("/api/weather", weatherRoutes);
 app.use("/api/config", configRouter);
 
 /**
@@ -120,7 +124,15 @@ app.use((req: Request, res: Response) => {
  * Listens on configured PORT for incoming HTTP requests
  * Logs startup message with health check URL for manual testing
  */
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`\n✅ Server running on http://localhost:${PORT}`);
   console.log(`Test it: curl http://localhost:${PORT}/api/health\n`);
+  
+  // Seed dimensions on startup
+  try {
+    await seedDimensions();
+  } catch (error) {
+    console.error('Failed to seed dimensions:', error);
+    process.exit(1);
+  }
 });

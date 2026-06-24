@@ -21,6 +21,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.authController = exports.AuthController = void 0;
 const auth_service_1 = require("../modules/auth/auth.service");
 const users_service_1 = require("../modules/users/users.service");
+const logger_1 = require("../shared/logger");
 /**
  * Authentication Controller
  *
@@ -51,7 +52,7 @@ class AuthController {
             res.redirect(authUrl);
         }
         catch (error) {
-            console.error("Error generating auth URL:", error);
+            logger_1.logger.error("AUTH", `Error generating auth URL: ${error.message}`);
             res.status(500).json({ error: error.message });
         }
     }
@@ -95,7 +96,7 @@ class AuthController {
             res.redirect(frontendCallback);
         }
         catch (error) {
-            console.error("Error in auth callback:", error);
+            logger_1.logger.error("AUTH", `Error in auth callback: ${error.message}`);
             res.status(500).json({ error: error.message });
         }
     }
@@ -201,3 +202,4 @@ exports.AuthController = AuthController;
  * @type {AuthController}
  */
 exports.authController = new AuthController();
+//# sourceMappingURL=auth.controller.js.map

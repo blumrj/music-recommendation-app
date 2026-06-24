@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Rnd, type DraggableData } from "react-rnd";
 import { calculateWindowPosition } from "../utils/calculateWindowPosition";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 interface ModalProps {
   title: string;
@@ -40,6 +41,7 @@ const Modal = ({
   bodyBg = "bg-primary",
 }: ModalProps) => {
   const [currentZIndex, setCurrentZIndex] = useState(zIndex);
+  const isMobile = useIsMobile();
 
   // Calculate draggable position (used in draggable mode)
   const { x, y } = useMemo(
@@ -109,7 +111,26 @@ const Modal = ({
     );
   }
 
-  // Draggable window mode (default)
+  // Mobile: render as static stacked block (no drag)
+  if (isMobile) {
+    return (
+      <div className="window w-full mb-4" style={{ fontSize: "11px" }}>
+        <div className="title-bar flex items-center justify-between shrink-0 bg-gradient-modal">
+          <div className="title-bar-text flex-1 text-light">{title}</div>
+          {!movableOnly && showClose && (
+            <div className="title-bar-controls">
+              <button aria-label="Close" onClick={onClose} />
+            </div>
+          )}
+        </div>
+        <div className={`window-body overflow-auto ${bodyBg}`}>
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  // Draggable window mode (desktop)
   return (
     <Rnd
       default={{

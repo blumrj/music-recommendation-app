@@ -61,6 +61,7 @@ export interface FormattedAlbumDTO {
   artist: string;
   imageUrl: string;
   spotifyUrl: string;
+  source?: 'spotify' | 'catalog';
 }
 
 /**

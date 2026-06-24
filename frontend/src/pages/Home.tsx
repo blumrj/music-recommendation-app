@@ -8,7 +8,7 @@ import {
   ProgressBar,
   Modal,
 } from "../components";
-import type { Recommendation, RecommendationsResponse, GenreCollection } from "../types";
+import type { Recommendation, RecommendationsResponse, GenreCollection, WeatherContext } from "../types";
 import { parseApiError } from "../utils/helpers";
 
 export default function Home() {
@@ -18,6 +18,7 @@ export default function Home() {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [recommendations, setRecommendations] = useState<RecommendationsResponse | null>(null);
+  const [weather, setWeather] = useState<WeatherContext | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Weather icon paths
@@ -79,8 +80,14 @@ export default function Home() {
 
   const fetchRecommendationsAtLocation = async (latitude: number, longitude: number) => {
     try {
-      const data = await apiClient.getRecommendations(latitude, longitude, user?.id);
-      setRecommendations(data as RecommendationsResponse);
+      // Fetch recommendations and weather in parallel
+      const [recData, weatherData] = await Promise.all([
+        apiClient.getRecommendations(latitude, longitude, user?.id),
+        apiClient.getWeather(latitude, longitude)
+      ]);
+      
+      setRecommendations(recData as RecommendationsResponse);
+      setWeather(weatherData as unknown as WeatherContext);
     } catch (err: unknown) {
       setError(parseApiError(err) || "Failed to fetch music recommendations");
     } finally {
@@ -168,35 +175,35 @@ export default function Home() {
               <div className="flex flex-col items-center text-center">
                 <img src={WEATHER_ICONS.condition} alt="Condition" className="w-8 h-8 mb-2" />
                 <p className="text-xs text-gray-500 font-semibold">Condition</p>
-                <p className="text-sm text-text-primary">{recommendations.weather?.condition}</p>
+                <p className="text-sm text-text-primary">{weather?.condition}</p>
               </div>
 
               {/* Temperature */}
               <div className="flex flex-col items-center text-center">
                 <img src={WEATHER_ICONS.temperature} alt="Temperature" className="w-8 h-8 mb-2" />
                 <p className="text-xs text-gray-500 font-semibold">Temp</p>
-                <p className="text-sm text-text-primary">{recommendations.weather?.temp}°C</p>
+                <p className="text-sm text-text-primary">{weather?.temp}°C</p>
               </div>
 
               {/* Humidity */}
               <div className="flex flex-col items-center text-center">
                 <img src={WEATHER_ICONS.humidity} alt="Humidity" className="w-8 h-8 mb-2" />
                 <p className="text-xs text-gray-500 font-semibold">Humidity</p>
-                <p className="text-sm text-text-primary">{recommendations.weather?.humidity}%</p>
+                <p className="text-sm text-text-primary">{weather?.humidity}%</p>
               </div>
 
               {/* Time of Day */}
               <div className="flex flex-col items-center text-center">
                 <img src={WEATHER_ICONS.timeOfDay} alt="Time of Day" className="w-8 h-8 mb-2" />
                 <p className="text-xs text-gray-500 font-semibold">Time</p>
-                <p className="text-sm text-text-primary capitalize">{recommendations.weather?.timeOfDay || "N/A"}</p>
+                <p className="text-sm text-text-primary capitalize">{weather?.timeOfDay || "N/A"}</p>
               </div>
 
               {/* Season */}
               <div className="flex flex-col items-center text-center">
                 <img src={WEATHER_ICONS.season} alt="Season" className="w-8 h-8 mb-2" />
                 <p className="text-xs text-gray-500 font-semibold">Season</p>
-                <p className="text-sm text-text-primary capitalize">{recommendations.weather?.season || "N/A"}</p>
+                <p className="text-sm text-text-primary capitalize">{weather?.season || "N/A"}</p>
               </div>
             </div>
           </Modal>

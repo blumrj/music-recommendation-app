@@ -255,6 +255,9 @@ export default function Onboarding() {
               <p className="text-[11px] truncate text-gray-700">
                 {currentAlbum.artist}
               </p>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                {currentAlbum.source === 'catalog' ? 'Suggested for you' : 'From your Spotify'}
+              </p>
             </div>
           </div>
         </Modal>
