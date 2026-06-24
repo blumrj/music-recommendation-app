@@ -11,6 +11,7 @@
  * Run: npx ts-node src/workers/catalog/discover.ts [--albums-per-tag=N]
  */
 
+import "../env";
 import { PrismaClient } from "@prisma/client";
 import { lastfmDiscoveryService } from "../../modules/discovery/lastfm-discovery.service";
 import { getAllGenres } from "../../config/genre-priors";

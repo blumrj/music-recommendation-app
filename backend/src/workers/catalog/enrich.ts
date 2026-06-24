@@ -7,6 +7,7 @@
  * Run: npx ts-node src/workers/catalog/enrich.ts [--batch 50]
  */
 
+import "../env";
 import { PrismaClient } from "@prisma/client";
 import { lastfmClient } from "../../infrastructure/lastfm/lastfm-client";
 

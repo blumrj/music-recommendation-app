@@ -8,6 +8,7 @@
  * Run: npx ts-node src/workers/catalog/embed.ts [--batch 100]
  */
 
+import "../env";
 import { PrismaClient } from "@prisma/client";
 import { tagClassifierService } from "../../modules/embeddings/tag-classifier.service";
 import { signalFusionService } from "../../modules/embeddings/signal-fusion.service";

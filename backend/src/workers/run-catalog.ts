@@ -15,9 +15,11 @@
  * are used as seeds, requiring no user data or manual input.
  */
 
+import "./env";
 import { PrismaClient } from "@prisma/client";
 import { execSync } from "child_process";
 import path from "path";
+import { seedDimensions } from "../config/dimension-seeder";
 
 const prisma = new PrismaClient();
 const ENRICH_BATCH = parseInt(process.env.ENRICH_BATCH ?? "50");
@@ -45,6 +47,10 @@ async function main() {
   console.log("═".repeat(60));
   console.log(" CATALOG PIPELINE START");
   console.log("═".repeat(60));
+
+  // ── Step 0: Seed Dimensions ──────────────────────────────────
+  console.log("\n── STEP 0: SEED DIMENSIONS ──");
+  await seedDimensions();
 
   const seedArgs = process.argv.slice(2);
 
