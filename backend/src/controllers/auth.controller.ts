@@ -106,7 +106,8 @@ export class AuthController {
 
       // STAGE 7: Redirect to frontend with all tokens in URL params
       // Frontend extracts, stores in localStorage, and uses for API calls
-      const frontendCallback = `http://localhost:5173/callback?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}&spotifyToken=${encodeURIComponent(spotifyTokens.access_token)}`;
+      const frontendBase = process.env.FRONTEND_URL || "http://localhost:5173";
+      const frontendCallback = `${frontendBase}/callback?accessToken=${encodeURIComponent(accessToken)}&refreshToken=${encodeURIComponent(refreshToken)}&spotifyToken=${encodeURIComponent(spotifyTokens.access_token)}`;
       res.redirect(frontendCallback);
 
     } catch (error: any) {
