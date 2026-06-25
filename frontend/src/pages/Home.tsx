@@ -149,10 +149,10 @@ export default function Home() {
             <AlbumGrid
               albums={(displayAlbums as Recommendation[])}
               onAlbumClick={(album) => {
-                const spotifyUrl = "spotifyUrl" in album ? album.spotifyUrl : "";
-                if (spotifyUrl) {
-                  window.open(spotifyUrl, "_blank");
-                }
+                const spotifyUrl = ("spotifyUrl" in album && album.spotifyUrl)
+                  ? album.spotifyUrl
+                  : `https://open.spotify.com/search/${encodeURIComponent(`${album.artist} ${album.name}`)}`;
+                window.open(spotifyUrl, "_blank");
               }}
               empty={displayAlbums.length === 0}
               emptyMessage="No albums to display"
